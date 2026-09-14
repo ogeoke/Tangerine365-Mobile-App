@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:sevenup_mobile/constants/app_assets.dart';
+import 'package:sevenup_mobile/constants/app_tokens.dart';
 import 'package:sevenup_mobile/models/banners.dart';
 import 'package:flutter/material.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
@@ -62,7 +64,19 @@ class _CarouselState extends State<Carousel> {
                     Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.network(item, fit: BoxFit.cover),
+                        Image.network(
+                          item,
+                          fit: BoxFit.cover,
+                          // Soft branded panel while loading and if the image
+                          // fails (e.g. a missing banner on the server) — no
+                          // default broken-image glyph.
+                          loadingBuilder: (context, child, progress) =>
+                              progress == null
+                                  ? child
+                                  : const _BannerPlaceholder(),
+                          errorBuilder: (_, __, ___) =>
+                              const _BannerPlaceholder(),
+                        ),
                         Positioned(
                             left: 0,
                             right: 0,
@@ -92,6 +106,40 @@ class _CarouselState extends State<Carousel> {
                             spacing: 6))),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown in place of a banner while it loads or if it fails to load (e.g. a
+/// missing image on the server) — a soft green panel with the faint wordmark,
+/// instead of the default broken-image icon.
+class _BannerPlaceholder extends StatelessWidget {
+  const _BannerPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppTokens.lightGreen, AppTokens.lightGreenAlt],
+        ),
+      ),
+      child: Center(
+        child: Opacity(
+          opacity: 0.5,
+          child: Image.asset(
+            AppAssets.logo,
+            height: 40,
+            errorBuilder: (_, __, ___) => const Icon(
+              Icons.image_outlined,
+              color: AppTokens.primary,
+              size: 34,
+            ),
           ),
         ),
       ),

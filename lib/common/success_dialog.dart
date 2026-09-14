@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
 
 /// Approved success popup (Figma 09A / 10A / 11B): a green check in a light-green
@@ -29,7 +30,14 @@ class AppSuccessDialog extends StatelessWidget {
           children: [
             _IconCircle(
               child: const Icon(Icons.check, color: AppTokens.primary, size: 40),
-            ),
+            )
+                .animate()
+                .scale(
+                    begin: const Offset(0.5, 0.5),
+                    end: const Offset(1, 1),
+                    duration: 420.ms,
+                    curve: Curves.easeOutBack)
+                .fadeIn(duration: 260.ms),
             const SizedBox(height: 18),
             Text(
               title,

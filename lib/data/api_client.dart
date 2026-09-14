@@ -9,10 +9,20 @@ import 'session_store.dart';
 
 class ApiClient {
   static var env = GetIt.I.get<Env>();
+
+  /// The API base, enforced to be HTTPS (fail-closed against any cleartext
+  /// misconfiguration — a hard requirement for the banking deployment).
+  static String get _base {
+    if (!env.baseUrl.startsWith('https://')) {
+      throw StateError('Insecure API base URL: HTTPS is required.');
+    }
+    return '${env.baseUrl}/api';
+  }
+
   static ApiRequest<ResponseType, InnerType>
       baseRequest<ResponseType, InnerType>({String? requestId}) =>
           ApiRequest<ResponseType, InnerType>(
-            baseUrl: '${env.baseUrl}/api',
+            baseUrl: _base,
             requestId: requestId,
             dataKey: 'data',
             interceptors: [
@@ -42,7 +52,7 @@ class ApiClient {
   static ApiRequest<ResponseType, InnerType>
       baseRequestNoAuth<ResponseType, InnerType>() =>
           ApiRequest<ResponseType, InnerType>(
-            baseUrl: '${env.baseUrl}/api',
+            baseUrl: _base,
             dataKey: 'data',
             interceptors: [
               HeaderInterceptor(

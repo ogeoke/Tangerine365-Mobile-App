@@ -12,6 +12,7 @@ import 'package:sevenup_mobile/common/app_dialog.dart';
 import 'package:sevenup_mobile/constants/pref_keys.dart';
 import 'package:sevenup_mobile/data/interceptors/json_interceptor.dart';
 import 'package:sevenup_mobile/data/local/secure_store.dart';
+import 'package:sevenup_mobile/data/session_store.dart';
 import 'package:sevenup_mobile/data/sharedpref_manager.dart';
 import 'package:sevenup_mobile/main.dart';
 import 'package:sevenup_mobile/models/user.dart';
@@ -66,7 +67,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<UpdateToken>((event, emit) {
       emit(Authenticated(event.token, state.user!, state.useBiometrics));
-      _vault.setString(event.token, PrefKeys.token);
+      // Correct (key, value) order so the token persists under PrefKeys.token.
+      _vault.setString(PrefKeys.token, event.token);
     });
 
     on<SetBiometrics>((event, emit) async {
@@ -78,6 +80,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<LogOut>((event, emit) {
       _repository.logout();
+      // Always invalidate the in-memory PHP session cookie on logout so it
+      // can't be replayed.
+      SessionStore.instance.clear();
       emit(
         UnAuthenticated(
           event.deleteSaved ? null : state.user,
@@ -86,8 +91,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         ),
       );
       if (event.deleteSaved) {
+        // Explicit logout: wipe every stored credential/token from the
+        // encrypted keystore.
         _vault.deleteKey(PrefKeys.token);
         _vault.deleteKey(PrefKeys.user);
+        _vault.deleteKey(PrefKeys.password);
+        _vault.deleteKey(PrefKeys.username);
       }
       if (!alreadyShownPopup && event.message?.isNotEmpty == true) {
         alreadyShownPopup = true;

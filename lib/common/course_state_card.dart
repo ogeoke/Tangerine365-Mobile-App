@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
 
 /// The state a course list can be in while it has no rows to show.
@@ -102,6 +103,7 @@ class _Mark extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (state) {
       case CourseCardState.loading:
+        // Three dots pulse in sequence (a typing-indicator style loop).
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(
@@ -112,10 +114,20 @@ class _Mark extends StatelessWidget {
               height: 9,
               decoration: const BoxDecoration(
                   color: AppTokens.primary, shape: BoxShape.circle),
-            ),
+            )
+                .animate(
+                    onPlay: (c) => c.repeat(reverse: true),
+                    delay: (i * 160).ms)
+                .scaleXY(
+                    begin: 0.5,
+                    end: 1.0,
+                    duration: 500.ms,
+                    curve: Curves.easeInOut)
+                .fade(begin: 0.35, end: 1.0, duration: 500.ms),
           ),
         );
       case CourseCardState.empty:
+        // Gentle "breathe" so an empty screen doesn't look frozen.
         return Container(
           width: 34,
           height: 34,
@@ -123,10 +135,25 @@ class _Mark extends StatelessWidget {
             shape: BoxShape.circle,
             border: Border.all(color: AppTokens.primary, width: 2),
           ),
-        );
+        )
+            .animate(onPlay: (c) => c.repeat(reverse: true))
+            .scaleXY(
+                begin: 0.9,
+                end: 1.08,
+                duration: 1200.ms,
+                curve: Curves.easeInOut)
+            .fade(begin: 0.6, end: 1.0, duration: 1200.ms);
       case CourseCardState.error:
+        // Quick pop-in so a failure registers.
         return const Icon(Icons.close,
-            color: AppTokens.statusNotStarted, size: 30);
+                color: AppTokens.statusNotStarted, size: 30)
+            .animate()
+            .scale(
+                begin: const Offset(0.3, 0.3),
+                end: const Offset(1, 1),
+                duration: 360.ms,
+                curve: Curves.easeOutBack)
+            .fadeIn(duration: 220.ms);
     }
   }
 }

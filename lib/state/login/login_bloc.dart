@@ -82,8 +82,9 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
   void _finalize(User user, String token, String username, String password) {
     GetIt.I<AuthBloc>().add(LogedIn(user, password, username));
     GetIt.I<AuthBloc>().add(UpdateToken(token));
-    _vault.setString(username, PrefKeys.username);
-    _vault.setString(password, PrefKeys.password);
-    _vault.setString(token, PrefKeys.token);
+    // (key, value) order — was previously swapped, storing junk keys.
+    _vault.setString(PrefKeys.username, username);
+    _vault.setString(PrefKeys.password, password);
+    _vault.setString(PrefKeys.token, token);
   }
 }

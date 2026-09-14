@@ -37,6 +37,7 @@ class AppUrls {
   static const courseProgressPercentage = 'course/courseProgressPercentage';
   static const courseProgress = 'course/courseProgressPercentage';
   static const userProfile = 'user/userdetailsbyuserid';
+  static const profile = 'profile'; // POST api/profile — extended learner profile
   static const webpages = 'webpages/index';
   static const faq = "https://learningzone.fcmb.com/www/web/faq_web.php";
 }

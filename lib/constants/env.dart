@@ -6,6 +6,10 @@ abstract class Env {
   /// API base url
   String get baseUrl;
 
+  /// Base URL for the legacy Knowledge Repository web view. Overridable per
+  /// environment instead of hardcoding it at the call site.
+  String get knowledgeBaseUrl => 'https://learning.sevenup.org/www';
+
   String get scormApiKey => 'q2Zvs7IWwVHZ0kgcAM8758x';
 
   String get appTitle => 'Tangerine365';

@@ -22,6 +22,7 @@ import '../../models/general.dart';
 import '../../models/learning.dart';
 import '../../models/metadata.dart';
 import '../../models/options.dart';
+import '../../models/profile.dart';
 import '../../models/progress.dart';
 import '../../models/recomended.dart';
 import '../../models/settings.dart';
@@ -89,6 +90,8 @@ class JsonInterceptor<ErrorType> implements ApiInterceptor {
         return Options.fromJson(json) as T?;
       case const (Progress):
         return Progress.fromJson(json) as T?;
+      case const (Profile):
+        return Profile.fromJson(json) as T?;
       case const (Test):
         return Test.fromJson(json) as T?;
       case const (Unit):
@@ -170,6 +173,7 @@ class JsonInterceptor<ErrorType> implements ApiInterceptor {
     if (value is Metadata) return value.toJson();
     if (value is Options) return value.toJson();
     if (value is Progress) return value.toJson();
+    if (value is Profile) return value.toJson();
     if (value is Test) return value.toJson();
     if (value is Unit) return value.toJson();
     if (value is Usage) return value.toJson();

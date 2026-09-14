@@ -1,11 +1,13 @@
 import 'package:data_repository/data_repository.dart';
 import 'package:get_it/get_it.dart';
+import 'package:sevenup_mobile/constants/env.dart';
 import 'package:sevenup_mobile/data/interceptors/auth_interceptor.dart';
 import 'package:sevenup_mobile/data/interceptors/token_interceptor.dart';
 import 'package:sevenup_mobile/models/assigned_course.dart';
 import 'package:sevenup_mobile/models/banners.dart';
 import 'package:sevenup_mobile/models/course_item.dart';
 import 'package:sevenup_mobile/models/course_progress.dart';
+import 'package:sevenup_mobile/models/profile.dart';
 import 'package:sevenup_mobile/models/recomended.dart';
 import 'package:sevenup_mobile/models/settings.dart';
 import 'package:sevenup_mobile/models/stats.dart';
@@ -26,7 +28,7 @@ class Api {
   ApiRequest<Map<String, dynamic>, Map<String, dynamic>> getKnoledgeRepo() {
     return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
         .copyWith(
-      baseUrl: 'https://learning.sevenup.org/www',
+      baseUrl: GetIt.I<Env>().knowledgeBaseUrl,
       path: 'web/knowledge.php',
       method: ApiMethods.get,
       dataKey: 'data',
@@ -194,6 +196,20 @@ class Api {
       dataKey: 'data',
       body: {
         'idst': GetIt.I<AuthBloc>().state.user?.id ?? '',
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+      },
+      isMultipart: true,
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Profile, Profile> profile() {
+    return ApiClient.baseRequest<Profile, Profile>().copyWith(
+      path: AppUrls.profile,
+      method: ApiMethods.post,
+      dataKey: 'data',
+      body: {
         'auth': GetIt.I<AuthBloc>().state.token ?? '',
       },
       isMultipart: true,

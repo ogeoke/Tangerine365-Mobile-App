@@ -5,6 +5,7 @@ import 'package:sevenup_mobile/models/assigned_course.dart';
 import 'package:sevenup_mobile/models/banners.dart';
 import 'package:sevenup_mobile/models/course_item.dart';
 import 'package:sevenup_mobile/models/course_progress.dart';
+import 'package:sevenup_mobile/models/profile.dart';
 import 'package:sevenup_mobile/models/recomended.dart';
 import 'package:sevenup_mobile/models/settings.dart';
 import 'package:sevenup_mobile/state/auth/index.dart';
@@ -69,7 +70,10 @@ class ApiRepository extends DataRepository {
   }
 
   Future<ApiResponse<List<Course>, Course>> searchCouse(String query) async {
-    return await handleRequest(_api.search(query));
+    // Bound user-supplied search input before it reaches the API.
+    final trimmed = query.trim();
+    final safe = trimmed.length > 200 ? trimmed.substring(0, 200) : trimmed;
+    return await handleRequest(_api.search(safe));
   }
 
   Future<ApiResponse<List<Banners>, Banners>> getBanners(
@@ -164,6 +168,10 @@ class ApiRepository extends DataRepository {
 
   Future<ApiResponse<Stats, Stats>> getStats() async {
     return await handleRequest(_api.stats());
+  }
+
+  Future<ApiResponse<Profile, Profile>> getProfile() async {
+    return await handleRequest(_api.profile());
   }
 
   Future<ApiResponse<List<Unit>, Unit>> getUnits(String lessonId) async {

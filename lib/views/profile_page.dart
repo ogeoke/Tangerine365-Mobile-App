@@ -7,8 +7,8 @@ import 'package:sevenup_mobile/common/nav_drawer.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
 import 'package:sevenup_mobile/constants/env.dart';
 import 'package:sevenup_mobile/data/api_repository.dart';
+import 'package:sevenup_mobile/models/profile.dart';
 import 'package:sevenup_mobile/models/stats.dart';
-import 'package:sevenup_mobile/models/user.dart';
 import 'package:sevenup_mobile/state/auth/index.dart';
 
 const _monthAbbr = [
@@ -19,10 +19,10 @@ const _monthAbbr = [
 /// Profile (Figma 17): read-only personal, employment and education details.
 ///
 /// Core fields (name, username, email, avatar) come from the authenticate
-/// session; Last Login comes from `userStats`. The remaining fields (Date of
-/// Birth, Marital Status and the Employment / Education sections) are LMS
-/// `custom_fields` from `POST /api/user/userdetailsbyuserid` — shown as "—"
-/// until that endpoint's custom fields are wired.
+/// session; Last Login comes from `userStats`. Date of Birth, Marital Status
+/// and the Employment / Education sections come from `POST /api/profile`
+/// (extended learner profile). Any field the backend leaves null/empty renders
+/// as "—".
 class ProfilePage extends StatefulWidget {
   static const routeName = '/profile';
   const ProfilePage({super.key});
@@ -35,6 +35,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _repository = ApiRepository();
   Stats? _stats;
+  Profile? _profile;
 
   @override
   void initState() {
@@ -43,14 +44,33 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _load() async {
-    final res = await _repository.getStats();
+    // Fire both requests concurrently, then await each.
+    final statsFuture = _repository.getStats();
+    final profileFuture = _repository.getProfile();
+    final statsRes = await statsFuture;
+    final profileRes = await profileFuture;
     if (!mounted) return;
-    if (res.body is Stats) setState(() => _stats = res.body as Stats);
+    setState(() {
+      if (statsRes.body is Stats) _stats = statsRes.body as Stats;
+      if (profileRes.body is Profile) _profile = profileRes.body as Profile;
+    });
   }
 
-  static String? _avatarUrl(User? user) {
-    final a = user?.profilePicture;
+  /// Display a value, treating null/blank as the "—" placeholder.
+  static String _v(String? s) =>
+      (s == null || s.trim().isEmpty) ? '—' : s.trim();
+
+  String _fmtDate(String? s) {
+    if (s == null || s.trim().isEmpty) return '—';
+    final d = DateTime.tryParse(s.trim());
+    if (d == null) return s.trim();
+    return '${d.day} ${_monthAbbr[d.month - 1]} ${d.year}';
+  }
+
+  static String? _avatarUrl(String? avatar) {
+    final a = avatar;
     if (a == null || a.trim().isEmpty) return null;
+    // Use whatever URL the server returns, as-is, when it's absolute.
     if (a.startsWith('http')) return a;
     final base = GetIt.I<Env>().baseUrl;
     final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
@@ -95,39 +115,44 @@ class _ProfilePageState extends State<ProfilePage> {
                   _ProfileHeaderCard(
                     name: name.isEmpty ? (u?.username ?? 'User') : name,
                     email: u?.email ?? '',
-                    avatarUrl: _avatarUrl(u),
+                    avatarUrl:
+                        _avatarUrl(_profile?.avatar ?? u?.profilePicture),
                   ),
                   const SizedBox(height: 18),
                   _InfoCard(
                     title: 'Personal Information',
                     rows: [
-                      ('First Name', u?.firstName ?? '—'),
-                      ('Last Name', u?.lastName ?? '—'),
-                      ('Username', u?.username ?? '—'),
-                      ('Email', u?.email ?? '—'),
-                      ('Last Login', _fmtLastLogin(_stats?.lastLogin)),
-                      ('Date of Birth', '—'),
-                      ('Marital Status', '—'),
+                      ('First Name', _v(_profile?.firstname ?? u?.firstName)),
+                      ('Last Name', _v(_profile?.lastname ?? u?.lastName)),
+                      ('Username', _v(_profile?.userid ?? u?.username)),
+                      ('Email', _v(_profile?.email ?? u?.email)),
+                      (
+                        'Last Login',
+                        _fmtLastLogin(_stats?.lastLogin ?? _profile?.lastEnter)
+                      ),
+                      ('Date of Birth', _fmtDate(_profile?.dateOfBirth)),
+                      ('Marital Status', _v(_profile?.maritalStatus)),
                     ],
                   ),
                   const SizedBox(height: 18),
                   _InfoCard(
                     title: 'Employment Information',
-                    rows: const [
-                      ('Department', '—'),
-                      ('Organization Grade', '—'),
-                      ('Years in Organization', '—'),
+                    rows: [
+                      ('Department', _v(_profile?.department)),
+                      ('Organization Grade', _v(_profile?.organizationGrade)),
+                      ('Years in Organization', _v(_profile?.yearsInOrg)),
                     ],
                   ),
                   const SizedBox(height: 18),
                   _InfoCard(
                     title: 'Education & Interests',
-                    rows: const [
-                      ('Education Level', '—'),
-                      ('Discipline', '—'),
-                      ('Professional Certification', '—'),
-                      ('Learning Interest', '—'),
-                      ('Hobby', '—'),
+                    rows: [
+                      ('Education Level', _v(_profile?.educationLevel)),
+                      ('Discipline', _v(_profile?.discipline)),
+                      ('Professional Certification',
+                          _v(_profile?.professionalCert)),
+                      ('Learning Interest', _v(_profile?.learningInterest)),
+                      ('Hobby', _v(_profile?.hobby)),
                     ],
                   ),
                 ],

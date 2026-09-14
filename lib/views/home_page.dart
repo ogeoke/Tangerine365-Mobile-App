@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:sevenup_mobile/constants/app_assets.dart';
@@ -6,7 +7,9 @@ import 'package:sevenup_mobile/constants/app_tokens.dart';
 import 'package:sevenup_mobile/state/auth/index.dart';
 import 'package:sevenup_mobile/state/settings/settings_cubit.dart';
 import 'package:sevenup_mobile/views/course/cubit/banner_cubit.dart';
+import 'package:sevenup_mobile/views/banking_tools_page.dart';
 import 'package:sevenup_mobile/views/courses_hub_page.dart';
+import 'package:sevenup_mobile/views/info_management_page.dart';
 
 import 'carousel.dart';
 
@@ -18,6 +21,18 @@ class HomePage extends StatelessWidget {
   void _openCourses(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const CoursesHubPage()),
+    );
+  }
+
+  void _openInformation(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const InfoManagementPage()),
+    );
+  }
+
+  void _openBanking(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BankingToolsPage()),
     );
   }
 
@@ -133,6 +148,7 @@ class HomePage extends StatelessWidget {
                               subtitle:
                                   'My Courses, Catalogue, Assessments & more',
                               active: true,
+                              animationIndex: 0,
                               onTap: () => _openCourses(context),
                             ),
                           ),
@@ -142,6 +158,7 @@ class HomePage extends StatelessWidget {
                               iconAsset: AppAssets.modRepository,
                               title: 'Knowledge Repository',
                               subtitle: 'Products, Policies & SOPs',
+                              animationIndex: 1,
                             ),
                           ),
                         ],
@@ -157,6 +174,11 @@ class HomePage extends StatelessWidget {
                               iconAsset: AppAssets.modBanking,
                               title: 'Banking Tools',
                               subtitle: 'Forms, Forex & Rates',
+                              animationIndex: 2,
+                              // Kept as "coming soon" for now, but tappable so
+                              // the built screens can be previewed. Remove the
+                              // preview tap (or flip to active) at launch.
+                              onTap: () => _openBanking(context),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -164,7 +186,12 @@ class HomePage extends StatelessWidget {
                             child: _ModuleCard(
                               iconAsset: AppAssets.modInformation,
                               title: 'Information Management',
-                              subtitle: 'Announcements & FAQs',
+                              subtitle: 'Communications',
+                              animationIndex: 3,
+                              // Kept as "coming soon" for now, but tappable so
+                              // the built screens can be previewed. Remove the
+                              // preview tap (or flip to active) at launch.
+                              onTap: () => _openInformation(context),
                             ),
                           ),
                         ],
@@ -232,12 +259,16 @@ class _ModuleCard extends StatelessWidget {
   final bool active;
   final VoidCallback? onTap;
 
+  /// Position in the grid (0-based), used only to stagger the entrance.
+  final int animationIndex;
+
   const _ModuleCard({
     required this.iconAsset,
     required this.title,
     required this.subtitle,
     this.active = false,
     this.onTap,
+    this.animationIndex = 0,
   });
 
   @override
@@ -320,6 +351,9 @@ class _ModuleCard extends StatelessWidget {
           ),
         ),
       ),
-    );
+    )
+        .animate(delay: (animationIndex * 90).ms)
+        .fadeIn(duration: 360.ms)
+        .slideY(begin: 0.10, end: 0, duration: 360.ms, curve: Curves.easeOut);
   }
 }

@@ -2,16 +2,12 @@
 import 'package:data_repository/data_repository.dart';
 import 'package:sevenup_mobile/constants/app_strings.dart';
 import 'package:sevenup_mobile/state/auth/index.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 
 class AuthInterceptor extends ApiInterceptor {
   @override
   ApiResponse<ResponseType, InnerType> onError<ResponseType, InnerType>(
       ApiResponse<ResponseType, InnerType> response) {
-    if (kDebugMode) {
-      print('in auth interceptor response ${response.statusCode}');
-    }
     if (response.statusCode == 401 &&
         (response.request.uri.pathSegments.last != 'logout.php' &&
             response.request.uri.pathSegments.last != 'login.php')) {

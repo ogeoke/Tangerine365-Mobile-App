@@ -421,8 +421,14 @@ class _DonutChart extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(
-        painter: _RingPainter(segments, total),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.easeOutCubic,
+        builder: (_, t, child) => CustomPaint(
+          painter: _RingPainter(segments, total, progress: t),
+          child: child,
+        ),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -444,7 +450,10 @@ class _DonutChart extends StatelessWidget {
 class _RingPainter extends CustomPainter {
   final List<(int, Color)> segments;
   final int total;
-  _RingPainter(this.segments, this.total);
+
+  /// 0→1 draw progress, used to sweep the segments in on entry.
+  final double progress;
+  _RingPainter(this.segments, this.total, {this.progress = 1});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -463,7 +472,7 @@ class _RingPainter extends CustomPainter {
     var start = -math.pi / 2 + gap / 2;
     for (final (value, color) in segments) {
       if (value <= 0) continue;
-      final sweep = (value / total) * (2 * math.pi) - gap;
+      final sweep = ((value / total) * (2 * math.pi) - gap) * progress;
       if (sweep <= 0) continue;
       final paint = Paint()
         ..color = color
@@ -477,7 +486,9 @@ class _RingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RingPainter old) =>
-      old.segments != segments || old.total != total;
+      old.segments != segments ||
+      old.total != total ||
+      old.progress != progress;
 }
 
 /// A left-aligned Performance stat card (Figma 08).

@@ -17,8 +17,15 @@ import 'package:sevenup_mobile/views/activatekey_page.dart';
 import 'package:sevenup_mobile/views/certificates_page.dart';
 import 'package:sevenup_mobile/views/competencies_page.dart';
 import 'package:sevenup_mobile/views/faq_page.dart';
+import 'package:sevenup_mobile/views/announcements_page.dart';
+import 'package:sevenup_mobile/views/bank_forms_page.dart';
+import 'package:sevenup_mobile/views/banking_tools_page.dart';
+import 'package:sevenup_mobile/views/forex_rates_page.dart';
 import 'package:sevenup_mobile/views/help_support_page.dart';
+import 'package:sevenup_mobile/views/loan_calculator_page.dart';
+import 'package:sevenup_mobile/views/info_management_page.dart';
 import 'package:sevenup_mobile/views/leaderboard_page.dart';
+import 'package:sevenup_mobile/views/messages_page.dart';
 import 'package:sevenup_mobile/views/my_learning_page.dart';
 import 'package:sevenup_mobile/views/profile_page.dart';
 
@@ -92,13 +99,16 @@ class _NavDrawerState extends State<NavDrawer> {
           _Sub('FAQs', (c) => _open(c, const FaqPage())),
         ]),
         _Module(AppAssets.modBanking, 'Banking Tools', [
-          _Sub('Forms', (c) => _soon(c, 'Forms')),
-          _Sub('Forex & Rates', (c) => _soon(c, 'Forex & Rates')),
-          _Sub('Loan Calculator', (c) => _soon(c, 'Loan Calculator')),
+          _Sub('Overview', (c) => _open(c, const BankingToolsPage())),
+          _Sub('Forex & Rates', (c) => _open(c, const ForexRatesPage())),
+          _Sub('Forms', (c) => _open(c, const BankFormsPage())),
+          _Sub('Loan Calculator',
+              (c) => _open(c, const LoanCalculatorPage())),
         ]),
         _Module(AppAssets.modInformation, 'Information Management', [
-          _Sub('Announcements', (c) => _soon(c, 'Announcements')),
-          _Sub('Messages', (c) => _soon(c, 'Messages')),
+          _Sub('Overview', (c) => _open(c, const InfoManagementPage())),
+          _Sub('Announcements', (c) => _open(c, const AnnouncementsPage())),
+          _Sub('Messages', (c) => _open(c, const MessagesPage())),
         ]),
       ];
 

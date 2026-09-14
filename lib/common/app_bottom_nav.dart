@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:sevenup_mobile/constants/app_assets.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
+import 'package:sevenup_mobile/views/banking_tools_page.dart';
 import 'package:sevenup_mobile/views/courses_hub_page.dart';
+import 'package:sevenup_mobile/views/info_management_page.dart';
 
 /// Shared bottom service menu (Figma 01) shown across the main screens.
 /// [currentIndex]: 0 = Home, 1 = Courses, -1 = none selected. Home returns to
@@ -14,6 +16,42 @@ class AppBottomNav extends StatelessWidget {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text('$label is coming soon.')));
+  }
+
+  /// Return to a module's main page from anywhere inside that module.
+  ///
+  /// Tapping a bottom-nav module tab should behave like pressing Back enough
+  /// times to reach the module's landing page — so from e.g. Courses > My
+  /// Learning > (detail), tapping "Courses" lands back on the Courses hub.
+  ///
+  /// - Already on the module's main page → do nothing.
+  /// - The main page is still in the back stack → pop straight back to it
+  ///   (preserves its state, no reload).
+  /// - Otherwise → open it fresh on top of the app root (Home), so Back from
+  ///   there still goes Home.
+  void _goToModule(
+    BuildContext context,
+    String routeName,
+    Widget Function() builder,
+  ) {
+    if (ModalRoute.of(context)?.settings.name == routeName) return;
+
+    final nav = Navigator.of(context);
+    var foundInStack = false;
+    nav.popUntil((route) {
+      final stop = route.settings.name == routeName || route.isFirst;
+      if (stop) foundInStack = route.settings.name == routeName;
+      return stop;
+    });
+    if (!foundInStack) {
+      nav.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => builder(),
+          settings: RouteSettings(name: routeName),
+        ),
+        (route) => route.isFirst,
+      );
+    }
   }
 
   @override
@@ -30,12 +68,11 @@ class AppBottomNav extends StatelessWidget {
       _NavItemData(
         iconAsset: AppAssets.modCourses,
         label: 'Courses',
-        onTap: () {
-          if (currentIndex == 1) return;
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CoursesHubPage()),
-          );
-        },
+        onTap: () => _goToModule(
+          context,
+          CoursesHubPage.routeName,
+          () => const CoursesHubPage(),
+        ),
       ),
       _NavItemData(
         iconAsset: AppAssets.modRepository,
@@ -44,13 +81,22 @@ class AppBottomNav extends StatelessWidget {
       ),
       _NavItemData(
         iconAsset: AppAssets.modBanking,
-        label: 'Banking Tools',
-        onTap: () => _comingSoon(context, 'Banking Tools'),
+        // Short label so it doesn't truncate in the 5-tab bottom bar.
+        label: 'Banking',
+        onTap: () => _goToModule(
+          context,
+          BankingToolsPage.routeName,
+          () => const BankingToolsPage(),
+        ),
       ),
       _NavItemData(
         iconAsset: AppAssets.modInformation,
         label: 'Information',
-        onTap: () => _comingSoon(context, 'Information Management'),
+        onTap: () => _goToModule(
+          context,
+          InfoManagementPage.routeName,
+          () => const InfoManagementPage(),
+        ),
       ),
     ];
     return Container(
