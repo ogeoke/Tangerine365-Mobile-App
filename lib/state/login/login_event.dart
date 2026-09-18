@@ -21,7 +21,7 @@ class LoginPressedEvent extends LoginEvent {
     if (kDebugMode) {
       print('''LoginPressedEvent: 
    { username: $username,
-     password: $password
+     password: ***
     }''');
     }
     return super.toString();

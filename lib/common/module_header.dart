@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:sevenup_mobile/common/notification_bell.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
 
 /// Standard module-screen header (Figma): a red back arrow, title + subtitle,
-/// and (optionally) the green side-menu icon, above a hairline divider.
+/// a notification bell, and (optionally) the green side-menu icon, above a
+/// hairline divider.
 class ModuleHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -42,6 +44,8 @@ class ModuleHeader extends StatelessWidget {
                   children: [
                     Text(
                       title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTokens.manrope(
                         size: 28,
                         weight: 700,
@@ -51,6 +55,8 @@ class ModuleHeader extends StatelessWidget {
                     if (subtitle != null)
                       Text(
                         subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTokens.manrope(
                           size: 13,
                           weight: 400,
@@ -60,12 +66,13 @@ class ModuleHeader extends StatelessWidget {
                   ],
                 ),
               ),
+              const NotificationBell(),
               if (onMenu != null)
                 GestureDetector(
                   onTap: onMenu,
                   behavior: HitTestBehavior.opaque,
                   child: const Padding(
-                    padding: EdgeInsets.only(top: 4, left: 8),
+                    padding: EdgeInsets.only(top: 4, left: 10),
                     child: Icon(Icons.menu, color: AppTokens.primary, size: 26),
                   ),
                 ),

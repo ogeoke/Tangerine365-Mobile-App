@@ -29,4 +29,12 @@ class AppAssets {
   static const modRepository = 'assets/images/mod_repository.png';
   static const modBanking = 'assets/images/mod_banking.png';
   static const modInformation = 'assets/images/mod_information.png';
+
+  // Colour-neutral carved-lattice texture laid over the active Home module
+  // cards. The card colour comes from AppTokens, so a new client only changes
+  // colours — never this image.
+  static const moduleCardTexture = 'assets/images/module_card_texture.png';
+
+  // Home banner placeholder (loading / failed / no banners).
+  static const bannerPlaceholder = 'assets/images/banner_placeholder.png';
 }

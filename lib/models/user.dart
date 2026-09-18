@@ -2,6 +2,11 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'user.g.dart';
 
+/// The LMS returns `idst` as a string on some endpoints and a number on others
+/// (e.g. authenticate/profile now send `11840` as an int). Coerce to String so
+/// parsing never throws on a numeric id.
+String? _idstToString(Object? v) => v?.toString();
+
 @JsonSerializable()
 class User {
   User({
@@ -13,7 +18,7 @@ class User {
     this.profilePicture,
   });
 
-  @JsonKey(name: 'idst')
+  @JsonKey(name: 'idst', fromJson: _idstToString)
   final String? id;
   @JsonKey(name: 'userid')
   final String? username;

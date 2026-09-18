@@ -1,5 +1,6 @@
 import 'package:data_repository/data_repository.dart';
 import 'package:sevenup_mobile/state/auth/index.dart';
+import 'package:sevenup_mobile/state/notifications/notification_cubit.dart';
 import 'package:sevenup_mobile/state/settings/settings_cubit.dart';
 import 'package:sevenup_mobile/views/course/cubit/category_cubit.dart';
 import 'package:sevenup_mobile/views/course/cubit/course_cubit.dart';
@@ -48,6 +49,7 @@ class DI {
           // BlocProvider(create: (_) => SearchCourseCubit()),
           BlocProvider(create: (_) => CategoryCubit()),
           BlocProvider(create: (_) => SettingsCubit()),
+          BlocProvider(create: (_) => NotificationCubit()),
           BlocProvider(create: (_) => BannerCubit()..load()),
           // ChangeNotifierProvider(create: (c) => CourseCubit()),
         ],

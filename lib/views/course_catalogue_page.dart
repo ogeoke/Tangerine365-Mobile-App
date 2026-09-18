@@ -48,6 +48,8 @@ class CourseCataloguePage extends StatelessWidget {
                 Expanded(
                   child: Text(
                     '${selected?.name} courses',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: AppTokens.manrope(
                       size: 18,
                       weight: 700,

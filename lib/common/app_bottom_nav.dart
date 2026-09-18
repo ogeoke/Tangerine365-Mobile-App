@@ -4,19 +4,15 @@ import 'package:sevenup_mobile/constants/app_tokens.dart';
 import 'package:sevenup_mobile/views/banking_tools_page.dart';
 import 'package:sevenup_mobile/views/courses_hub_page.dart';
 import 'package:sevenup_mobile/views/info_management_page.dart';
+import 'package:sevenup_mobile/views/knowledge_repository_page.dart';
 
 /// Shared bottom service menu (Figma 01) shown across the main screens.
 /// [currentIndex]: 0 = Home, 1 = Courses, -1 = none selected. Home returns to
-/// the app root; Courses opens the hub; the remaining modules are "coming soon".
+/// the app root; every module tab returns to that module's main page.
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   const AppBottomNav({super.key, this.currentIndex = -1});
 
-  void _comingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('$label is coming soon.')));
-  }
 
   /// Return to a module's main page from anywhere inside that module.
   ///
@@ -77,7 +73,11 @@ class AppBottomNav extends StatelessWidget {
       _NavItemData(
         iconAsset: AppAssets.modRepository,
         label: 'Repository',
-        onTap: () => _comingSoon(context, 'Knowledge Repository'),
+        onTap: () => _goToModule(
+          context,
+          KnowledgeRepositoryPage.routeName,
+          () => const KnowledgeRepositoryPage(),
+        ),
       ),
       _NavItemData(
         iconAsset: AppAssets.modBanking,

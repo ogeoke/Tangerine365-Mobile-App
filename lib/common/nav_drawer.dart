@@ -6,9 +6,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:sevenup_mobile/common/avatar_url.dart';
+import 'package:sevenup_mobile/common/logout_dialog.dart';
 import 'package:sevenup_mobile/constants/app_assets.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
-import 'package:sevenup_mobile/constants/env.dart';
 import 'package:sevenup_mobile/models/user.dart';
 import 'package:sevenup_mobile/services/biometrics_service.dart';
 import 'package:sevenup_mobile/state/auth/index.dart';
@@ -16,8 +17,8 @@ import 'package:sevenup_mobile/views/about_page.dart';
 import 'package:sevenup_mobile/views/activatekey_page.dart';
 import 'package:sevenup_mobile/views/certificates_page.dart';
 import 'package:sevenup_mobile/views/competencies_page.dart';
-import 'package:sevenup_mobile/views/faq_page.dart';
 import 'package:sevenup_mobile/views/announcements_page.dart';
+import 'package:sevenup_mobile/views/communications_page.dart';
 import 'package:sevenup_mobile/views/bank_forms_page.dart';
 import 'package:sevenup_mobile/views/banking_tools_page.dart';
 import 'package:sevenup_mobile/views/forex_rates_page.dart';
@@ -25,11 +26,12 @@ import 'package:sevenup_mobile/views/help_support_page.dart';
 import 'package:sevenup_mobile/views/loan_calculator_page.dart';
 import 'package:sevenup_mobile/views/info_management_page.dart';
 import 'package:sevenup_mobile/views/leaderboard_page.dart';
+import 'package:sevenup_mobile/views/knowledge_repository_page.dart';
 import 'package:sevenup_mobile/views/messages_page.dart';
 import 'package:sevenup_mobile/views/my_learning_page.dart';
 import 'package:sevenup_mobile/views/profile_page.dart';
 
-const Color _logoutColor = Color(0xFFE5361B);
+const Color logoutColor = Color(0xFFE5361B);
 
 /// A single tappable row inside an expanded module.
 class _Sub {
@@ -60,57 +62,60 @@ class NavDrawer extends StatefulWidget {
 class _NavDrawerState extends State<NavDrawer> {
   int? _expanded; // index of the open module, null = all collapsed
 
-  static String? _avatarUrl(User? user) {
-    final a = user?.profilePicture;
-    if (a == null || a.trim().isEmpty) return null;
-    if (a.startsWith('http')) return a;
-    final base = GetIt.I<Env>().baseUrl;
-    final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-    if (a.startsWith('/')) return '$b$a';
-    // A bare avatar filename lives in the LMS user-photo directory.
-    return '$b/files/appCore/photo/$a';
-  }
+  static String? _avatarUrl(User? user) =>
+      resolveAvatarUrl(user?.profilePicture);
 
   void _open(BuildContext context, Widget page) {
     Navigator.of(context).pop(); // close the drawer
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
   }
 
-  void _soon(BuildContext context, String label) {
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('$label is coming soon.')));
-  }
-
   List<_Module> get _modules => [
-        _Module(AppAssets.modCourses, 'Courses', [
-          _Sub('My Learning', (c) => _open(c, const MyLearningPage())),
-          _Sub('Leaderboard', (c) => _open(c, const LeaderboardPage())),
-          _Sub('Subscription Code',
-              (c) => _open(c, const ActivateKeyPage())),
-          _Sub('Competencies', (c) => _open(c, const CompetenciesPage())),
-          _Sub('Certificates', (c) => _open(c, const CertificatesPage())),
-        ]),
-        _Module(AppAssets.modRepository, 'Knowledge Repository', [
-          _Sub('Products', (c) => _soon(c, 'Products')),
-          _Sub('Policies & SOPs', (c) => _soon(c, 'Policies & SOPs')),
-          _Sub('Learning Series', (c) => _soon(c, 'Learning Series')),
-          _Sub('FAQs', (c) => _open(c, const FaqPage())),
-        ]),
-        _Module(AppAssets.modBanking, 'Banking Tools', [
-          _Sub('Overview', (c) => _open(c, const BankingToolsPage())),
-          _Sub('Forex & Rates', (c) => _open(c, const ForexRatesPage())),
-          _Sub('Forms', (c) => _open(c, const BankFormsPage())),
-          _Sub('Loan Calculator',
-              (c) => _open(c, const LoanCalculatorPage())),
-        ]),
-        _Module(AppAssets.modInformation, 'Information Management', [
-          _Sub('Overview', (c) => _open(c, const InfoManagementPage())),
-          _Sub('Announcements', (c) => _open(c, const AnnouncementsPage())),
-          _Sub('Messages', (c) => _open(c, const MessagesPage())),
-        ]),
-      ];
+    _Module(AppAssets.modCourses, 'Courses', [
+      _Sub('My Learning', (c) => _open(c, const MyLearningPage())),
+      _Sub('Leaderboard', (c) => _open(c, const LeaderboardPage())),
+      _Sub('Subscription Code', (c) => _open(c, const ActivateKeyPage())),
+      _Sub('Competencies', (c) => _open(c, const CompetenciesPage())),
+      _Sub('Certificates', (c) => _open(c, const CertificatesPage())),
+    ]),
+    _Module(AppAssets.modRepository, 'Knowledge Repository', [
+      _Sub('Overview', (c) => _open(c, const KnowledgeRepositoryPage())),
+      _Sub(
+        'Products',
+        (c) => _open(
+          c,
+          const KnowledgeResultsPage(types: ['product'], title: 'Products'),
+        ),
+      ),
+      _Sub(
+        'Policies & SOPs',
+        (c) => _open(
+          c,
+          const KnowledgeResultsPage(
+            types: ['policy', 'sop'],
+            title: 'Policies & SOPs',
+          ),
+        ),
+      ),
+      _Sub(
+        'FAQs',
+        (c) =>
+            _open(c, const KnowledgeResultsPage(types: ['faq'], title: 'FAQs')),
+      ),
+    ]),
+    _Module(AppAssets.modBanking, 'Banking Tools', [
+      _Sub('Overview', (c) => _open(c, const BankingToolsPage())),
+      _Sub('Forex & Rates', (c) => _open(c, const ForexRatesPage())),
+      _Sub('Forms', (c) => _open(c, const BankFormsPage())),
+      _Sub('Loan Calculator', (c) => _open(c, const LoanCalculatorPage())),
+    ]),
+    _Module(AppAssets.modInformation, 'Information Management', [
+      _Sub('Overview', (c) => _open(c, const InfoManagementPage())),
+      _Sub('Announcements', (c) => _open(c, const AnnouncementsPage())),
+      _Sub('Communications', (c) => _open(c, const CommunicationsPage())),
+      _Sub('Messages', (c) => _open(c, const MessagesPage())),
+    ]),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -139,22 +144,26 @@ class _NavDrawerState extends State<NavDrawer> {
                   ),
                 const _SectionLabel('ACCOUNT & SUPPORT'),
                 _AccountRow(
-                    icon: Icons.account_circle_outlined,
-                    label: 'Profile',
-                    onTap: () => _open(context, const ProfilePage())),
+                  icon: Icons.account_circle_outlined,
+                  label: 'Profile',
+                  onTap: () => _open(context, const ProfilePage()),
+                ),
                 _AccountRow(
-                    icon: Icons.help_outline,
-                    label: 'Help & Support',
-                    onTap: () => _open(context, const HelpSupportPage())),
+                  icon: Icons.help_outline,
+                  label: 'Help & Support',
+                  onTap: () => _open(context, const HelpSupportPage()),
+                ),
                 _AccountRow(
-                    icon: Icons.info_outline,
-                    label: 'About',
-                    onTap: () => _open(context, const AboutPage())),
+                  icon: Icons.info_outline,
+                  label: 'About',
+                  onTap: () => _open(context, const AboutPage()),
+                ),
                 _AccountRow(
-                    icon: Icons.logout,
-                    label: 'Logout',
-                    danger: true,
-                    onTap: () => _confirmLogout(context)),
+                  icon: Icons.logout,
+                  label: 'Logout',
+                  danger: true,
+                  onTap: () => confirmLogout(context, closeDrawer: true),
+                ),
                 const _BiometricRow(),
               ],
             ),
@@ -164,81 +173,6 @@ class _NavDrawerState extends State<NavDrawer> {
       ),
     );
   }
-}
-
-/// Logout confirmation (Figma Group 406).
-void _confirmLogout(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (c) => Dialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 44),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('!',
-                style: AppTokens.manrope(
-                    size: 30, weight: 700, color: _logoutColor)),
-            const SizedBox(height: 4),
-            Text('Log out of Tangerine365?',
-                textAlign: TextAlign.center,
-                style: AppTokens.manrope(
-                    size: 17, weight: 700, color: AppTokens.textPrimary)),
-            const SizedBox(height: 8),
-            Text(
-              "You'll need to enter your login details and complete verification again.",
-              textAlign: TextAlign.center,
-              style: AppTokens.manrope(
-                  size: 12,
-                  weight: 400,
-                  height: 17,
-                  color: AppTokens.textSecondary),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _logoutColor,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () {
-                  Navigator.of(c).pop(); // dialog
-                  Navigator.of(context).pop(); // drawer
-                  GetIt.I<AuthBloc>().add(const LogOut(true));
-                },
-                child: Text('Log out',
-                    style: AppTokens.manrope(
-                        size: 14, weight: 600, color: Colors.white)),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppTokens.primary),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () => Navigator.of(c).pop(),
-                child: Text('Cancel',
-                    style: AppTokens.manrope(
-                        size: 14, weight: 600, color: AppTokens.primary)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 class _Header extends StatelessWidget {
@@ -304,14 +238,21 @@ class _Header extends StatelessWidget {
                             imageUrl: avatarUrl!,
                             fit: BoxFit.cover,
                             errorWidget: (_, __, ___) => const Icon(
-                                Icons.person,
-                                color: AppTokens.primary,
-                                size: 44),
-                            placeholder: (_, __) => const Icon(Icons.person,
-                                color: AppTokens.primary, size: 44),
+                              Icons.person,
+                              color: AppTokens.primary,
+                              size: 44,
+                            ),
+                            placeholder: (_, __) => const Icon(
+                              Icons.person,
+                              color: AppTokens.primary,
+                              size: 44,
+                            ),
                           )
-                        : const Icon(Icons.person,
-                            color: AppTokens.primary, size: 44),
+                        : const Icon(
+                            Icons.person,
+                            color: AppTokens.primary,
+                            size: 44,
+                          ),
                   ),
                   const SizedBox(height: 14),
                   Text(
@@ -319,7 +260,10 @@ class _Header extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTokens.manrope(
-                        size: 22, weight: 700, color: Colors.white),
+                      size: 22,
+                      weight: 700,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -327,9 +271,10 @@ class _Header extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTokens.manrope(
-                        size: 13,
-                        weight: 400,
-                        color: Colors.white.withOpacity(0.9)),
+                      size: 13,
+                      weight: 400,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
                   ),
                 ],
               ),
@@ -376,20 +321,30 @@ class _ModuleTile extends StatelessWidget {
                     style: AppTokens.manrope(
                       size: 16,
                       weight: 700,
-                      color:
-                          expanded ? AppTokens.primary : AppTokens.textPrimary,
+                      color: expanded
+                          ? AppTokens.primary
+                          : AppTokens.textPrimary,
                     ),
                   ),
                 ),
-                Icon(expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    color: AppTokens.primary, size: 22),
+                Icon(
+                  expanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: AppTokens.primary,
+                  size: 22,
+                ),
               ],
             ),
           ),
         ),
         if (!expanded)
           const Divider(
-              height: 1, thickness: 1, color: Color(0xFFEDEDED), indent: 24),
+            height: 1,
+            thickness: 1,
+            color: Color(0xFFEDEDED),
+            indent: 24,
+          ),
         if (expanded)
           for (final s in module.subs)
             InkWell(
@@ -397,24 +352,25 @@ class _ModuleTile extends StatelessWidget {
               child: Column(
                 children: [
                   Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(58, 18, 24, 18),
+                    padding: const EdgeInsets.fromLTRB(58, 18, 24, 18),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         s.label,
                         style: AppTokens.manrope(
-                            size: 15,
-                            weight: 400,
-                            color: AppTokens.textPrimary),
+                          size: 15,
+                          weight: 400,
+                          color: AppTokens.textPrimary,
+                        ),
                       ),
                     ),
                   ),
                   const Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Color(0xFFEDEDED),
-                      indent: 58),
+                    height: 1,
+                    thickness: 1,
+                    color: Color(0xFFEDEDED),
+                    indent: 58,
+                  ),
                 ],
               ),
             ),
@@ -433,10 +389,11 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text,
         style: AppTokens.manrope(
-            size: 12,
-            weight: 700,
-            color: AppTokens.textSecondary,
-            letterSpacing: 0.6),
+          size: 12,
+          weight: 700,
+          color: AppTokens.textSecondary,
+          letterSpacing: 0.6,
+        ),
       ),
     );
   }
@@ -456,7 +413,7 @@ class _AccountRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? _logoutColor : AppTokens.primary;
+    final color = danger ? logoutColor : AppTokens.primary;
     return InkWell(
       onTap: onTap,
       child: Column(
@@ -472,14 +429,18 @@ class _AccountRow extends StatelessWidget {
                   style: AppTokens.manrope(
                     size: 16,
                     weight: 500,
-                    color: danger ? _logoutColor : AppTokens.textPrimary,
+                    color: danger ? logoutColor : AppTokens.textPrimary,
                   ),
                 ),
               ],
             ),
           ),
           const Divider(
-              height: 1, thickness: 1, color: Color(0xFFEDEDED), indent: 24),
+            height: 1,
+            thickness: 1,
+            color: Color(0xFFEDEDED),
+            indent: 24,
+          ),
         ],
       ),
     );
@@ -508,16 +469,22 @@ class _BiometricRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Use Biometrics',
-                        style: AppTokens.manrope(
-                            size: 16,
-                            weight: 500,
-                            color: AppTokens.textPrimary)),
-                    Text(on ? 'Enabled' : 'Disabled',
-                        style: AppTokens.manrope(
-                            size: 12,
-                            weight: 400,
-                            color: AppTokens.textSecondary)),
+                    Text(
+                      'Use Biometrics',
+                      style: AppTokens.manrope(
+                        size: 16,
+                        weight: 500,
+                        color: AppTokens.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      on ? 'Enabled' : 'Disabled',
+                      style: AppTokens.manrope(
+                        size: 12,
+                        weight: 400,
+                        color: AppTokens.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -558,7 +525,10 @@ class _Footer extends StatelessWidget {
         child: Text(
           'Tangerine365 • v1.0.0',
           style: AppTokens.manrope(
-              size: 12, weight: 400, color: AppTokens.textSecondary),
+            size: 12,
+            weight: 400,
+            color: AppTokens.textSecondary,
+          ),
         ),
       ),
     );

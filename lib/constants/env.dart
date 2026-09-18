@@ -10,7 +10,6 @@ abstract class Env {
   /// environment instead of hardcoding it at the call site.
   String get knowledgeBaseUrl => 'https://learning.sevenup.org/www';
 
-  String get scormApiKey => 'q2Zvs7IWwVHZ0kgcAM8758x';
 
   String get appTitle => 'Tangerine365';
 

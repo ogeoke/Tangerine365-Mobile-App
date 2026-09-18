@@ -90,6 +90,7 @@ flutter:
   assets:
   - assets/images/
   - assets/svg/
+  - assets/js/
 
   fonts:
   - family: Manrope

@@ -218,6 +218,280 @@ class Api {
     );
   }
 
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> certificates() {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: AppUrls.certificates,
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {'auth': GetIt.I<AuthBloc>().state.token ?? ''},
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> certificateRender(
+    String certificateId,
+    String courseId,
+  ) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: AppUrls.certificateRender,
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        'certificate_id': certificateId,
+        'course_id': courseId,
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  /// Issues (generates) a certificate. `data` has the same shape as
+  /// [certificateRender] (design + substitutions), so it can be drawn directly.
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> certificateGenerate(
+    String certificateId,
+    String courseId,
+  ) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: AppUrls.certificateGenerate,
+      method: ApiMethods.post,
+      dataKey: '', // keep the envelope: success + message + data
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        'certificate_id': certificateId,
+        'course_id': courseId,
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> announcements({
+    int page = 1,
+    int limit = 30,
+    bool unreadOnly = false,
+  }) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: AppUrls.announcements,
+      method: ApiMethods.post,
+      dataKey: '', // `data` is a list — keep the whole envelope, read data[] in-app
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        'page': '$page',
+        'limit': '$limit',
+        'unreadOnly': unreadOnly ? '1' : '0',
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> announcementRead(
+    String id,
+  ) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: '${AppUrls.announcementRead}/$id',
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        'announcementId': id,
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  /// Communication-module records. `status` is `unread`, `read` or `all`.
+  /// `data` is `{communications[]}`; `meta` carries paging + `unreadCount`.
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> communications({
+    String status = 'all',
+    int page = 1,
+    int limit = 50,
+  }) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: AppUrls.communications,
+      method: ApiMethods.post,
+      dataKey: '', // keep the whole envelope (data + meta)
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        'status': status,
+        'page': '$page',
+        'limit': '$limit',
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> communicationRead(
+    String id,
+  ) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: '${AppUrls.communicationRead}/$id',
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        'communicationId': id,
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  /// Generic Knowledge Repository POST; keeps the whole envelope.
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> knowledgeRequest(
+    String path, [
+    Map<String, String> params = const {},
+  ]) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: path,
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        ...params,
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  /// Inbox (`sent: false`) or sent box (`sent: true`). `data` is
+  /// `{total, page, limit, total_pages, unread_count?, messages[]}`.
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> messages({
+    required bool sent,
+    int page = 1,
+    int limit = 50,
+  }) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: sent ? AppUrls.messagesSent : AppUrls.messagesInbox,
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        'page': '$page',
+        'limit': '$limit',
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> messageDetail(
+    String id,
+  ) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: AppUrls.messageDetail,
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        'messageId': id,
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> messageRead(
+    String id,
+  ) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: '${AppUrls.messageRead}/$id',
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {'auth': GetIt.I<AuthBloc>().state.token ?? ''},
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> messageReply(
+    String id,
+    String content,
+  ) {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: '${AppUrls.messageReply}/$id',
+      method: ApiMethods.post,
+      dataKey: '', // keep the envelope so the app can check `success`
+      isMultipart: true,
+      body: {
+        'auth': GetIt.I<AuthBloc>().state.token ?? '',
+        // The server reads the id from the body (not just the URL) — without
+        // it the reply is rejected with 422.
+        'messageId': id,
+        'content': content,
+      },
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> notificationCounts() {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: AppUrls.notificationCounts,
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {'auth': GetIt.I<AuthBloc>().state.token ?? ''},
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> leaderboard() {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: AppUrls.leaderboard,
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {'auth': GetIt.I<AuthBloc>().state.token ?? ''},
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
+  ApiRequest<Map<String, dynamic>, Map<String, dynamic>> competencies() {
+    return ApiClient.baseRequest<Map<String, dynamic>, Map<String, dynamic>>()
+        .copyWith(
+      path: AppUrls.competencies,
+      method: ApiMethods.post,
+      dataKey: 'data',
+      isMultipart: true,
+      body: {'auth': GetIt.I<AuthBloc>().state.token ?? ''},
+      error: ErrorDescription(),
+      interceptors: [JsonInterceptor<ErrorModel>(), AuthInterceptor()],
+    );
+  }
+
   ApiRequest<List<Unit>, Unit> units(String lessonId) {
     return ApiClient.baseRequest<List<Unit>, Unit>().copyWith(
       path: "units.php",

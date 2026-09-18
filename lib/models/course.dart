@@ -5,6 +5,8 @@ import 'course_stats.dart';
 
 part 'course.g.dart';
 
+String? _toStringOrNull(Object? v) => v?.toString();
+
 @JsonSerializable()
 class Course {
   Course({
@@ -34,6 +36,7 @@ class Course {
     this.enrolled,
     this.courseImage,
     this.userStatus,
+    this.waiting,
     this.isEnrolled,
     this.canEnter,
     this.courseBoxEnabled,
@@ -94,8 +97,12 @@ class Course {
   final dynamic enrolled;
   @JsonKey(name: 'course_image')
   final String? courseImage;
-  @JsonKey(name: 'user_status')
+  // userCourses sends a number (-2, 0, 2); recentlyViewed sends a string.
+  @JsonKey(name: 'user_status', fromJson: _toStringOrNull)
   final String? userStatus;
+  // 1 / true while the enrolment request awaits admin approval.
+  @JsonKey(name: 'waiting')
+  final dynamic waiting;
   @JsonKey(name: 'is_enrolled')
   final bool? isEnrolled;
   @JsonKey(name: 'canEnter')
@@ -112,6 +119,20 @@ class Course {
   final String? dateFirstAccess;
   @JsonKey(name: 'course_stats')
   final CourseStats? courseStats;
+
+  /// True when the user has requested this course but an administrator has not
+  /// approved it yet. Such a course is NOT an enrolment: it must not be shown
+  /// as enterable and its content must not be opened. The LMS signals it with
+  /// `waiting: 1`, `can_enter.reason: "waiting"` or subscription status -2
+  /// (waiting list).
+  bool get isAwaitingApproval =>
+      waiting == true ||
+      waiting == 1 ||
+      waiting == '1' ||
+      canEnter1?.reason == 'waiting' ||
+      userStatus == '-2' ||
+      courseStats?.status == '-2';
+
   Map<String, dynamic> toJson() => _$CourseToJson(this);
 
   static Course fromJson(Map<String, dynamic> json) => _$CourseFromJson(json);

@@ -2,7 +2,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:sevenup_mobile/common/app_bottom_nav.dart';
 import 'package:sevenup_mobile/common/course_card.dart';
 import 'package:sevenup_mobile/common/course_state_card.dart';
@@ -18,6 +17,7 @@ import 'package:sevenup_mobile/views/course_details.dart';
 import 'package:sevenup_mobile/views/course_list.dart';
 import 'package:sevenup_mobile/views/my_courses_full_page.dart';
 import 'package:sevenup_mobile/views/my_courses_page.dart';
+import 'package:sevenup_mobile/services/app_router.dart';
 import 'package:sevenup_mobile/state/settings/settings_cubit.dart';
 
 /// Approved Courses Hub (Figma 02 / 05). Header with side-menu, a
@@ -32,9 +32,9 @@ class CoursesHubPage extends StatefulWidget {
   State<CoursesHubPage> createState() => _CoursesHubPageState();
 }
 
-class _CoursesHubPageState extends State<CoursesHubPage> {
+class _CoursesHubPageState extends State<CoursesHubPage>
+    with WidgetsBindingObserver, RouteAware {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
-  final _refreshController = RefreshController();
   late final CourseCubit _recentlyViewedCubit;
   late final CourseCubit _recommendationsCubit;
 
@@ -46,11 +46,41 @@ class _CoursesHubPageState extends State<CoursesHubPage> {
     super.initState();
     _recentlyViewedCubit = CourseCubit();
     _recommendationsCubit = CourseCubit();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
+  }
+
+  // Returning to the hub or resuming the app re-fetches enrolment state, so a
+  // request the admin has just approved flips from "Waiting" to its real
+  // status (e.g. "Enter") in the catalogue without a manual refresh.
+  @override
+  void didPopNext() => _refreshEnrolment();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshEnrolment();
+  }
+
+  /// The catalogue's "Waiting" state comes from My Courses (userCourses), so
+  /// both must be reloaded together.
+  void _refreshEnrolment() {
+    if (!mounted) return;
+    context.read<CourseCubit>()
+      ..loadCourses()
+      ..loadCatalogue(context.read<CategoryCubit>().state.selected);
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _recentlyViewedCubit.close();
     _recommendationsCubit.close();
     _catalogue.dispose();
@@ -67,7 +97,13 @@ class _CoursesHubPageState extends State<CoursesHubPage> {
     context.read<CategoryCubit>().load();
     context.read<BannerCubit>().load();
     context.read<SettingsCubit>().load();
-    _refreshController.refreshCompleted();
+  }
+
+  /// Pull-to-refresh handler: kick off the reloads and hold the spinner briefly
+  /// while the cubits fetch and repaint.
+  Future<void> _pullRefresh() async {
+    _refresh();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
   }
 
   void _onMyCourses() {
@@ -81,9 +117,7 @@ class _CoursesHubPageState extends State<CoursesHubPage> {
 
   void _onCatalogue() {
     _catalogue.value = true;
-    context
-        .read<CourseCubit>()
-        .loadCatalogue(context.read<CategoryCubit>().state.selected);
+    _refreshEnrolment();
   }
 
   @override
@@ -132,14 +166,13 @@ class _CoursesHubPageState extends State<CoursesHubPage> {
               ),
             ),
             Expanded(
-              child: SmartRefresher(
-                controller: _refreshController,
-                enablePullDown: true,
-                header: const MaterialClassicHeader(),
-                onRefresh: _refresh,
+              child: RefreshIndicator(
+                color: AppTokens.primary,
+                onRefresh: _pullRefresh,
                 child: ValueListenableBuilder<bool>(
                   valueListenable: _catalogue,
                   builder: (context, catalogue, _) => ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.only(bottom: 24),
                     children: [
                       if (catalogue)
@@ -253,9 +286,8 @@ class _Recommendations extends StatelessWidget {
             if (courses.isEmpty) return const SizedBox.shrink();
             final by = rec?.recommended?.recommendByCourseName;
             return _GridSection(
-              title: (by != null && by.isNotEmpty)
-                  ? 'Because you are enrolled in $by'
-                  : 'Recommended for you',
+              title: 'Recommended for you',
+              subtitle: by,
               recommended: true,
               courses: courses,
               onSeeAll: () => _seeAll(
@@ -350,7 +382,7 @@ class _GridSection extends StatelessWidget {
             childAspectRatio: 0.72,
             children: [
               for (final c in courses)
-                _HubCourseCard(course: c, recommended: recommended),
+                HubCourseCard(course: c, recommended: recommended),
             ],
           ),
         ],
@@ -361,12 +393,13 @@ class _GridSection extends StatelessWidget {
 
 /// A single course card in the hub grid: image, title, a status/label line,
 /// and a green "Continue ›" / "Enter ›" action.
-class _HubCourseCard extends StatelessWidget {
+class HubCourseCard extends StatelessWidget {
   final Course course;
   final bool recommended;
-  const _HubCourseCard({required this.course, required this.recommended});
+  const HubCourseCard({required this.course, required this.recommended});
 
   String get _statusText {
+    if (course.isAwaitingApproval) return 'Awaiting approval';
     if (recommended) return 'Recommended course';
     final s = (course.courseStats?.status ??
             course.userStatus ??
@@ -392,9 +425,15 @@ class _HubCourseCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       borderRadius: BorderRadius.circular(AppTokens.cardRadius),
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => CourseDetails(course: course)),
-        ),
+        onTap: () {
+          if (course.isAwaitingApproval) {
+            showAwaitingApprovalMessage(context);
+            return;
+          }
+          Navigator.of(context).push(
+            CupertinoPageRoute(builder: (_) => CourseDetails(course: course)),
+          );
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -435,17 +474,35 @@ class _HubCourseCard extends StatelessWidget {
                           color: AppTokens.textSecondary),
                     ),
                     const Spacer(),
-                    Row(
-                      children: [
-                        Text(
-                          _inProgress ? 'Continue' : 'Enter',
-                          style: AppTokens.manrope(
-                              size: 13, weight: 600, color: AppTokens.primary),
-                        ),
-                        const Icon(Icons.chevron_right,
-                            color: AppTokens.primary, size: 18),
-                      ],
-                    ),
+                    if (course.isAwaitingApproval)
+                      Row(
+                        children: [
+                          const Icon(Icons.lock_outline,
+                              size: 13, color: AppTokens.textSecondary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Waiting',
+                            style: AppTokens.manrope(
+                                size: 13,
+                                weight: 600,
+                                color: AppTokens.textSecondary),
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          Text(
+                            _inProgress ? 'Continue' : 'Enter',
+                            style: AppTokens.manrope(
+                                size: 13,
+                                weight: 600,
+                                color: AppTokens.primary),
+                          ),
+                          const Icon(Icons.chevron_right,
+                              color: AppTokens.primary, size: 18),
+                        ],
+                      ),
                   ],
                 ),
               ),

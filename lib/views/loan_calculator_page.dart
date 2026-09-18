@@ -687,6 +687,7 @@ class LoanEstimatePage extends StatelessWidget {
                         ),
                         const SizedBox(height: 14),
                         FittedBox(
+                          fit: BoxFit.scaleDown,
                           child: Text(formatNaira(e.perPayment),
                               style: AppTokens.manrope(
                                   size: 44,
@@ -813,19 +814,31 @@ class _Row extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 18),
       child: Row(
         children: [
-          Text(label,
-              style: AppTokens.manrope(
-                  size: 15,
-                  weight: 400,
-                  color: emphasize
-                      ? AppTokens.textPrimary
-                      : AppTokens.textSecondary)),
-          const Spacer(),
-          Text(value,
-              style: AppTokens.manrope(
-                  size: emphasize ? 17 : 16,
-                  weight: 700,
-                  color: emphasize ? AppTokens.primary : AppTokens.textPrimary)),
+          Flexible(
+            child: Text(label,
+                style: AppTokens.manrope(
+                    size: 15,
+                    weight: 400,
+                    color: emphasize
+                        ? AppTokens.textPrimary
+                        : AppTokens.textSecondary)),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(value,
+                  maxLines: 1,
+                  textAlign: TextAlign.right,
+                  style: AppTokens.manrope(
+                      size: emphasize ? 17 : 16,
+                      weight: 700,
+                      color: emphasize
+                          ? AppTokens.primary
+                          : AppTokens.textPrimary)),
+            ),
+          ),
         ],
       ),
     );

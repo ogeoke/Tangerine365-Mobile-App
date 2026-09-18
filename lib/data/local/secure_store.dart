@@ -4,7 +4,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStore {
   // final SimpleSecureStorage storage;
-  final FlutterSecureStorage storage = FlutterSecureStorage();
+  // EncryptedSharedPreferences (AES-256 via the Android Keystore) rather than
+  // the plugin's legacy default.
+  final FlutterSecureStorage storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
   bool isInitialized = false;
 

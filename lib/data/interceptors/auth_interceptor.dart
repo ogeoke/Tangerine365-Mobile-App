@@ -11,7 +11,10 @@ class AuthInterceptor extends ApiInterceptor {
     if (response.statusCode == 401 &&
         (response.request.uri.pathSegments.last != 'logout.php' &&
             response.request.uri.pathSegments.last != 'login.php')) {
-      GetIt.I<AuthBloc>().add(const LogOut(false, AppStrings.multipleLogins));
+      // A 401 can mean the session simply expired, or was ended by a login on
+      // another device — so show a neutral message instead of always claiming
+      // "simultaneous logins".
+      GetIt.I<AuthBloc>().add(const LogOut(false, AppStrings.sessionEnded));
     }
     // if ((response.statusCode == 401) &&
     //     GetIt.I<AuthBloc>().state is Authenticated) {

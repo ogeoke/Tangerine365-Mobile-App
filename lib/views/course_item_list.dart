@@ -108,17 +108,9 @@ class CourseItemCard extends StatelessWidget {
             );
             return;
           }
-          if (data.type == 'item') {
-            launchUrl(
-              _buildContentURi(
-                data.idItem ?? '',
-                data.src ?? '',
-                data.idCourse ?? '',
-              ),
-              mode: LaunchMode.externalApplication,
-            );
-            return;
-          }
+          // Never hand a session-token URL to the external browser (it would
+          // land in browser history, logs and Referer headers) — play every
+          // item in the in-app player below.
           // launchUrl(_buildContentURi(data.idItem ?? '', data.src ?? ''),
           // webViewConfiguration: const WebViewConfiguration(
           //   enableDomStorage: true,
@@ -220,7 +212,6 @@ class CourseItemCard extends StatelessWidget {
     //   // 'lesson_id': lessonId,
     //   // 'lesson_content_id': contentId
     // });
-    print(uri.toString());
     return uri;
   }
 }

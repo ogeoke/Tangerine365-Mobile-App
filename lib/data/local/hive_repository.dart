@@ -16,7 +16,9 @@ class HiveRepository implements LocalRepository {
   /// AES key for the cache, generated once and kept in the OS-encrypted
   /// keystore (never on disk in the clear).
   Future<List<int>> _encryptionKey() async {
-    const store = FlutterSecureStorage();
+    const store = FlutterSecureStorage(
+      aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    );
     final existing = await store.read(key: _keyName);
     if (existing != null && existing.isNotEmpty) {
       try {

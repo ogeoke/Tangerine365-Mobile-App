@@ -4,8 +4,8 @@ import 'package:get_it/get_it.dart';
 import 'package:sevenup_mobile/common/app_bottom_nav.dart';
 import 'package:sevenup_mobile/common/module_header.dart';
 import 'package:sevenup_mobile/common/nav_drawer.dart';
+import 'package:sevenup_mobile/common/avatar_url.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
-import 'package:sevenup_mobile/constants/env.dart';
 import 'package:sevenup_mobile/data/api_repository.dart';
 import 'package:sevenup_mobile/models/profile.dart';
 import 'package:sevenup_mobile/models/stats.dart';
@@ -67,17 +67,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return '${d.day} ${_monthAbbr[d.month - 1]} ${d.year}';
   }
 
-  static String? _avatarUrl(String? avatar) {
-    final a = avatar;
-    if (a == null || a.trim().isEmpty) return null;
-    // Use whatever URL the server returns, as-is, when it's absolute.
-    if (a.startsWith('http')) return a;
-    final base = GetIt.I<Env>().baseUrl;
-    final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-    if (a.startsWith('/')) return '$b$a';
-    // A bare avatar filename lives in the LMS user-photo directory.
-    return '$b/files/appCore/photo/$a';
-  }
+  static String? _avatarUrl(String? avatar) => resolveAvatarUrl(avatar);
 
   String _fmtLastLogin(String? s) {
     final d = DateTime.tryParse(s ?? '');
@@ -260,9 +250,12 @@ class _InfoCard extends StatelessWidget {
                             color: AppTokens.textSecondary)),
                   ),
                   const SizedBox(width: 16),
+                  // Keep values (e.g. "18 Sep 2026, 9:41 AM") on one line —
+                  // shrink slightly instead of wrapping.
                   Flexible(
                     child: Text(rows[i].$2,
                         textAlign: TextAlign.right,
+                        softWrap: true,
                         style: AppTokens.manrope(
                             size: 14,
                             weight: 700,

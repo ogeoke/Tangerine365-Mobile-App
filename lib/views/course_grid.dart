@@ -78,6 +78,11 @@ class _CourseListState extends State<CourseGrid> {
                     ),
                   )));
         }
+        final waitingIds = {
+          for (final a in state.myCourses ?? const [])
+            if (a.course.isAwaitingApproval)
+              a.course.courseId ?? a.course.idCourse ?? '',
+        };
         return GridView.builder(
             physics: const NeverScrollableScrollPhysics(),
             shrinkWrap: true,
@@ -90,17 +95,40 @@ class _CourseListState extends State<CourseGrid> {
             itemCount: data.length ?? 0,
             itemBuilder: (c, i) {
               var item = data[i];
-              // Subscribe method: 0 = admin only, 1 = requires approval,
-              // 2 = free/self-subscribe. Already-enrolled courses just Enter.
+              // subscribe_method: 0 = admin only, 1 = requires approval,
+              // 2 = free/self-subscribe.
+              final id = item.courseId ?? item.idCourse ?? '';
+              final enrolled = item.enrolled == '1' || item.enrolled == 1;
+              final method = item.subscribeMethod ?? '';
+              final status = item.status ?? '';
+              final type = (item.courseType ?? '').toLowerCase();
+              final isClassroom =
+                  type.contains('classroom') || type.contains('ilt');
+
+              // The catalogue reports `enrolled: 1` for pending requests too
+              // and has no `waiting` flag, so the pending-approval state comes
+              // from My Courses (userCourses: waiting / can_enter.reason).
+              // Until My Courses has loaded, fall back to the old heuristic.
+              final bool waiting = state.myCourses != null
+                  ? waitingIds.contains(id)
+                  : (method == '1' && enrolled && status != '1');
+
               CourseAction courseAction;
-              if (item.enrolled == '1') {
+              if (waiting) {
+                // Approval requested but not yet granted — not an enrolment,
+                // cannot be entered (LMS shows "Waiting").
+                courseAction = CourseAction.waiting;
+              } else if (enrolled) {
                 courseAction = CourseAction.enter;
-              } else if (item.subscribeMethod == '2') {
-                courseAction = CourseAction.subscribe;
-              } else if (item.subscribeMethod == '0') {
+              } else if (method == '0') {
                 courseAction = CourseAction.adminOnly;
+              } else if (method == '1') {
+                courseAction = CourseAction.enroll; // Request for access
+              } else if (isClassroom && (item.dateBegin ?? '').isEmpty) {
+                // Classroom/ILT course with no scheduled edition to join.
+                courseAction = CourseAction.noEditions;
               } else {
-                courseAction = CourseAction.enroll;
+                courseAction = CourseAction.subscribe;
               }
               return CourseCard(course: item, action: courseAction);
             });

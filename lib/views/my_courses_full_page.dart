@@ -2,14 +2,15 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:html/parser.dart' as html;
 import 'package:sevenup_mobile/common/app_bottom_nav.dart';
+import 'package:sevenup_mobile/common/course_card.dart';
 import 'package:sevenup_mobile/common/course_state_card.dart';
 import 'package:sevenup_mobile/common/module_header.dart';
 import 'package:sevenup_mobile/common/nav_drawer.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
 import 'package:sevenup_mobile/extensions/date.dart';
 import 'package:sevenup_mobile/models/course.dart';
+import 'package:sevenup_mobile/services/app_router.dart';
 import 'package:sevenup_mobile/views/course/cubit/category_cubit.dart';
 import 'package:sevenup_mobile/views/course/cubit/course_cubit.dart';
 import 'package:sevenup_mobile/views/course_details.dart';
@@ -27,7 +28,8 @@ class MyCoursesFullPage extends StatefulWidget {
   State<MyCoursesFullPage> createState() => _MyCoursesFullPageState();
 }
 
-class _MyCoursesFullPageState extends State<MyCoursesFullPage> {
+class _MyCoursesFullPageState extends State<MyCoursesFullPage>
+    with WidgetsBindingObserver, RouteAware {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   _StatusTab _tab = _StatusTab.allOpen;
   String? _category; // null = All
@@ -37,8 +39,35 @@ class _MyCoursesFullPageState extends State<MyCoursesFullPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance
         .addPostFrameCallback((_) => context.read<CourseCubit>().loadCourses());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Returning here or resuming the app re-fetches, so a course the admin has
+  // just approved appears without a manual refresh.
+  @override
+  void didPopNext() => context.read<CourseCubit>().loadCourses();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<CourseCubit>().loadCourses();
+    }
   }
 
   // ---- status classification --------------------------------------------
@@ -47,6 +76,7 @@ class _MyCoursesFullPageState extends State<MyCoursesFullPage> {
   // signal: a completion date => completed; a first-access date without a
   // completion date => in progress. Fall back to the status strings otherwise.
   bool _completed(Course c) {
+    if (c.isAwaitingApproval) return false; // not enrolled yet
     if ((c.courseStats?.dateComplete ?? '').isNotEmpty) return true;
     final s =
         (c.courseStats?.status ?? c.userStatus ?? c.status ?? '').toLowerCase();
@@ -54,7 +84,7 @@ class _MyCoursesFullPageState extends State<MyCoursesFullPage> {
   }
 
   bool _inProgress(Course c) {
-    if (_completed(c)) return false;
+    if (c.isAwaitingApproval || _completed(c)) return false;
     final started = (c.courseStats?.dateFirstAccess ?? '').isNotEmpty ||
         (c.dateFirstAccess ?? '').isNotEmpty;
     if (started) return true;
@@ -78,11 +108,10 @@ class _MyCoursesFullPageState extends State<MyCoursesFullPage> {
     return d != null ? '${d.year}' : null;
   }
 
+  // Excludes courses still awaiting admin approval — they only appear here
+  // once approved.
   List<Course> get _allCourses =>
-      (context.watch<CourseCubit>().state.myCourses ?? const [])
-          .map((e) => e.course)
-          .whereType<Course>()
-          .toList();
+      context.watch<CourseCubit>().state.enrolledCourses ?? const [];
 
   List<Course> get _filtered {
     var list = _allCourses;
@@ -185,30 +214,34 @@ class _MyCoursesFullPageState extends State<MyCoursesFullPage> {
                 ],
               ),
             ),
-            // Horizontally scrollable so the pills never overflow on narrower
-            // screens while staying on a single line per the design.
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+            // Three equal-width status pills that always fit the row.
+            Padding(
               padding: const EdgeInsets.fromLTRB(
                   AppTokens.screenPadding, 16, AppTokens.screenPadding, 0),
               child: Row(
                 children: [
-                  _StatusPill(
-                    label: 'All Open',
-                    selected: _tab == _StatusTab.allOpen,
-                    onTap: () => setState(() => _tab = _StatusTab.allOpen),
+                  Expanded(
+                    child: _StatusPill(
+                      label: 'All Open',
+                      selected: _tab == _StatusTab.allOpen,
+                      onTap: () => setState(() => _tab = _StatusTab.allOpen),
+                    ),
                   ),
                   const SizedBox(width: 10),
-                  _StatusPill(
-                    label: 'Completed',
-                    selected: _tab == _StatusTab.completed,
-                    onTap: () => setState(() => _tab = _StatusTab.completed),
+                  Expanded(
+                    child: _StatusPill(
+                      label: 'Completed',
+                      selected: _tab == _StatusTab.completed,
+                      onTap: () => setState(() => _tab = _StatusTab.completed),
+                    ),
                   ),
                   const SizedBox(width: 10),
-                  _StatusPill(
-                    label: 'In Progress',
-                    selected: _tab == _StatusTab.inProgress,
-                    onTap: () => setState(() => _tab = _StatusTab.inProgress),
+                  Expanded(
+                    child: _StatusPill(
+                      label: 'In Progress',
+                      selected: _tab == _StatusTab.inProgress,
+                      onTap: () => setState(() => _tab = _StatusTab.inProgress),
+                    ),
                   ),
                 ],
               ),
@@ -286,11 +319,31 @@ class _MyCourseCard extends StatelessWidget {
 
   String _plain(String? h) {
     if (h == null || h.isEmpty) return '';
-    try {
-      return html.parse(h).body?.text ?? '';
-    } catch (_) {
-      return '';
+    // Lightweight tag-strip. `html.parse()` was previously run here on every
+    // card build (including during scroll and on every filter/tab change),
+    // which janked the list; a regex is far cheaper for a two-line preview.
+    var s = h.replaceAll(RegExp(r'<[^>]*>'), ' ');
+    s = s
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&apos;', "'");
+    return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  /// Opens the course content — unless the enrolment is still awaiting admin
+  /// approval, in which case the course stays locked.
+  void _open(BuildContext context) {
+    if (course.isAwaitingApproval) {
+      showAwaitingApprovalMessage(context);
+      return;
     }
+    Navigator.of(context).push(
+      CupertinoPageRoute(builder: (_) => CourseDetails(course: course)),
+    );
   }
 
   @override
@@ -302,9 +355,7 @@ class _MyCourseCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppTokens.cardRadius),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => CourseDetails(course: course)),
-        ),
+        onTap: () => _open(context),
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppTokens.cardRadius),
@@ -375,19 +426,15 @@ class _MyCourseCard extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 '$typeLabel${year != null ? '  •  $year' : ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: AppTokens.manrope(
                                     size: 11,
                                     weight: 400,
                                     color: AppTokens.textSecondary),
                               ),
                             ),
-                            _EnterButton(
-                              onTap: () => Navigator.of(context).push(
-                                CupertinoPageRoute(
-                                    builder: (_) =>
-                                        CourseDetails(course: course)),
-                              ),
-                            ),
+                            _EnterButton(onTap: () => _open(context)),
                           ],
                         ),
                       ],
@@ -501,7 +548,7 @@ class _StatusPill extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(24),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
@@ -510,6 +557,7 @@ class _StatusPill extends StatelessWidget {
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 width: 8,
@@ -520,12 +568,16 @@ class _StatusPill extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: AppTokens.manrope(
-                  size: 13,
-                  weight: 600,
-                  color: selected ? Colors.white : AppTokens.textPrimary,
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTokens.manrope(
+                    size: 13,
+                    weight: 600,
+                    color: selected ? Colors.white : AppTokens.textPrimary,
+                  ),
                 ),
               ),
             ],

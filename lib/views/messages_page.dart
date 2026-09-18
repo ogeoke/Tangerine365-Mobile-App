@@ -1,17 +1,28 @@
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sevenup_mobile/common/downloads.dart';
+import 'package:sevenup_mobile/common/safety.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sevenup_mobile/common/app_bottom_nav.dart';
 import 'package:sevenup_mobile/common/module_header.dart';
 import 'package:sevenup_mobile/common/nav_drawer.dart';
 import 'package:sevenup_mobile/common/skeleton.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
+import 'package:sevenup_mobile/data/api_repository.dart';
 import 'package:sevenup_mobile/models/info_comms.dart';
+import 'package:sevenup_mobile/state/notifications/notification_cubit.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Which box the Messages screen is showing.
 enum _Box { inbox, sent }
 
 /// Messages (Figma 12A Inbox / 12B Sent). Search field, Inbox/Sent toggle, and
-/// a list of message rows. Tapping an inbox row opens the read/reply screen
-/// (12C). Sample data until the messages endpoints exist.
+/// a list of message rows. Tapping a row opens the read/reply screen (12C).
+/// Live data: `POST api/messages/inbox` and `POST api/messages/sent`.
 class MessagesPage extends StatefulWidget {
   const MessagesPage({super.key});
 
@@ -21,22 +32,55 @@ class MessagesPage extends StatefulWidget {
 
 class _MessagesPageState extends State<MessagesPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
-  final List<InfoMessage> _inbox = sampleInbox();
-  final List<InfoMessage> _sent = sampleSent();
+  final _repository = ApiRepository();
+  List<InfoMessage> _inbox = [];
+  List<InfoMessage> _sent = [];
+  int? _serverUnread;
   _Box _box = _Box.inbox;
   String _query = '';
   bool _loading = true;
+  bool _error = false;
 
   @override
   void initState() {
     super.initState();
-    // No endpoint yet — briefly show the loading skeleton, then the list.
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (mounted) setState(() => _loading = false);
-    });
+    _load();
   }
 
-  int get _unread => _inbox.where((m) => m.unread).length;
+  static List<InfoMessage>? _parse(Map<String, dynamic>? data) {
+    final list = data?['messages'];
+    if (list is! List) return null;
+    return list
+        .whereType<Map>()
+        .map((e) => InfoMessage.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  Future<void> _load() async {
+    final results = await Future.wait([
+      _repository.getMessages(sent: false),
+      _repository.getMessages(sent: true),
+    ]);
+    if (!mounted) return;
+    final inbox = _parse(results[0].body);
+    final sent = _parse(results[1].body);
+    final unread = results[0].body?['unread_count'];
+    setState(() {
+      if (inbox != null) _inbox = inbox;
+      if (sent != null) _sent = sent;
+      _serverUnread = unread is num ? unread.toInt() : int.tryParse('$unread');
+      _error = inbox == null && sent == null;
+      _loading = false;
+    });
+    // Keep the header bell in sync with what we just fetched.
+    if (mounted) context.read<NotificationCubit>().load();
+  }
+
+  // Prefer the local count once rows are loaded so opening a message updates
+  // the badge immediately; fall back to the server's unread_count.
+  int get _unread => _inbox.isNotEmpty
+      ? _inbox.where((m) => m.unread).length
+      : (_serverUnread ?? 0);
 
   List<InfoMessage> get _source => _box == _Box.inbox ? _inbox : _sent;
 
@@ -52,10 +96,19 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   Future<void> _openMessage(InfoMessage m) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => MessageDetailPage(message: m)),
+    final replied = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) =>
+            MessageDetailPage(message: m, sent: _box == _Box.sent),
+      ),
     );
-    setState(() {}); // reflect read state + any sent reply
+    if (!mounted) return;
+    setState(() {}); // reflect read state immediately
+    if (replied == true) {
+      // "View Sent Items" after a reply: jump to the Sent box and refetch.
+      setState(() => _box = _Box.sent);
+    }
+    _load();
   }
 
   @override
@@ -116,23 +169,38 @@ class _MessagesPageState extends State<MessagesPage> {
             Expanded(
               child: _loading
                   ? const SkeletonCards()
-                  : visible.isEmpty
-                      ? const _EmptyMessages()
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(
-                              AppTokens.screenPadding,
-                              4,
-                              AppTokens.screenPadding,
-                              24),
-                          itemCount: visible.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 14),
-                          itemBuilder: (_, i) => _MessageRow(
-                            message: visible[i],
-                            sent: _box == _Box.sent,
-                            onTap: () => _openMessage(visible[i]),
-                          ),
-                        ),
+                  : RefreshIndicator(
+                      color: AppTokens.primary,
+                      onRefresh: _load,
+                      child: _error
+                          ? ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [_ErrorMessages(onRetry: _load)],
+                            )
+                          : visible.isEmpty
+                              ? ListView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  children: const [_EmptyMessages()],
+                                )
+                              : ListView.separated(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.fromLTRB(
+                                      AppTokens.screenPadding,
+                                      4,
+                                      AppTokens.screenPadding,
+                                      24),
+                                  itemCount: visible.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 14),
+                                  itemBuilder: (_, i) => _MessageRow(
+                                    message: visible[i],
+                                    sent: _box == _Box.sent,
+                                    onTap: () => _openMessage(visible[i]),
+                                  ),
+                                ),
+                    ),
             ),
           ],
         ),
@@ -278,12 +346,16 @@ class _MessageRow extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          m.timeLabel,
-                          style: AppTokens.manrope(
-                              size: 13,
-                              weight: 400,
-                              color: AppTokens.textSecondary),
+                        Flexible(
+                          child: Text(
+                            m.timeLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTokens.manrope(
+                                size: 13,
+                                weight: 400,
+                                color: AppTokens.textSecondary),
+                          ),
                         ),
                         if (unread) ...[
                           const SizedBox(width: 8),
@@ -324,6 +396,45 @@ class _MessageRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ErrorMessages extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _ErrorMessages({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(AppTokens.screenPadding),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      decoration: BoxDecoration(
+        color: AppTokens.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, size: 34, color: AppTokens.accent),
+          const SizedBox(height: 18),
+          Text("Couldn't load messages",
+              style: AppTokens.manrope(
+                  size: 22, weight: 700, color: AppTokens.textPrimary)),
+          const SizedBox(height: 10),
+          Text('Check your connection and retry.',
+              textAlign: TextAlign.center,
+              style: AppTokens.manrope(
+                  size: 14, weight: 400, color: AppTokens.textSecondary)),
+          const SizedBox(height: 18),
+          TextButton(
+            onPressed: onRetry,
+            child: Text('Retry',
+                style: AppTokens.manrope(
+                    size: 15, weight: 700, color: AppTokens.primary)),
+          ),
+        ],
       ),
     );
   }
@@ -380,7 +491,11 @@ enum _ReplyState { idle, validationError, sending, sent, failed }
 
 class MessageDetailPage extends StatefulWidget {
   final InfoMessage message;
-  const MessageDetailPage({super.key, required this.message});
+
+  /// True when opened from the Sent box (no reply composer, no mark-read).
+  final bool sent;
+  const MessageDetailPage(
+      {super.key, required this.message, this.sent = false});
 
   @override
   State<MessageDetailPage> createState() => _MessageDetailPageState();
@@ -389,13 +504,35 @@ class MessageDetailPage extends StatefulWidget {
 class _MessageDetailPageState extends State<MessageDetailPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _controller = TextEditingController();
+  final _repository = ApiRepository();
   _ReplyState _state = _ReplyState.idle;
+  late InfoMessage _message = widget.message;
+  bool _downloading = false;
 
   @override
   void initState() {
     super.initState();
-    // Opening an inbox message marks it read.
+    _loadDetail();
+    if (!widget.sent && widget.message.unread) _markRead();
+  }
+
+  /// Refresh the full message (body / attachment) from `messages/getMessage`.
+  Future<void> _loadDetail() async {
+    final res = await _repository.getMessage(widget.message.id);
+    final data = res.body;
+    if (!mounted || data == null || data.isEmpty) return;
+    final fresh = InfoMessage.fromJson(data);
+    if (fresh.id.isEmpty) return;
+    fresh.unread = false;
+    setState(() => _message = fresh);
+  }
+
+  /// Opening an inbox message marks it read on the server, then refreshes the
+  /// header bell. The row is updated optimistically.
+  Future<void> _markRead() async {
     widget.message.unread = false;
+    await _repository.markMessageRead(widget.message.id);
+    if (mounted) context.read<NotificationCubit>().load();
   }
 
   @override
@@ -405,20 +542,93 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
   }
 
   Future<void> _send() async {
-    if (_controller.text.trim().isEmpty) {
+    final content = _controller.text.trim();
+    if (content.isEmpty) {
       setState(() => _state = _ReplyState.validationError);
       return;
     }
     setState(() => _state = _ReplyState.sending);
-    // No endpoint yet — simulate a send round-trip.
-    await Future.delayed(const Duration(milliseconds: 1200));
+    final res = await _repository.replyToMessage(_message.threadId, content);
     if (!mounted) return;
-    setState(() => _state = _ReplyState.sent);
+    final body = res.body;
+    final ok = res.isSuccessful &&
+        body != null &&
+        (body['success'] == true || body['status'] == 'success');
+    setState(() => _state = ok ? _ReplyState.sent : _ReplyState.failed);
+  }
+
+  /// Download the attachment into the phone's Downloads folder (same native
+  /// MediaStore channel the certificates use).
+  Future<void> _downloadAttachment(InfoMessage m) async {
+    final url = m.attachmentUrl;
+    if (url == null || _downloading) return;
+    setState(() => _downloading = true);
+    final client = HttpClient();
+    try {
+      final req = await client.getUrl(Uri.parse(url));
+      final res = await req.close();
+      if (res.statusCode != 200) {
+        throw HttpException('HTTP ${res.statusCode}');
+      }
+      final bytes = await consolidateHttpClientResponseBytes(res);
+      final name = safeFileName(m.attachmentDisplayName);
+      final mime = _mimeFor(name);
+      final saved = await Downloads.save(
+        filename: name,
+        mimeType: mime,
+        bytes: bytes,
+      );
+      if (!mounted) return;
+      Downloads.showSaved(context,
+          name: saved.name, uri: saved.uri, mimeType: mime);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+            content: Text('Could not download the attachment.')));
+    } finally {
+      client.close();
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  static String _mimeFor(String name) {
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    const types = {
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx':
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'pptx':
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'txt': 'text/plain',
+      'csv': 'text/csv',
+      'zip': 'application/zip',
+    };
+    return types[ext] ?? 'application/octet-stream';
+  }
+
+  Future<void> _openAttachment(String url) async {
+    if (!await openExternalUrl(url)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open the attachment.')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final m = widget.message;
+    final m = _message;
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppTokens.screenBg,
@@ -429,7 +639,8 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
           children: [
             ModuleHeader(
               title: 'Read Message',
-              subtitle: 'Inbox · ${m.sender}',
+              // Inbox: who sent it to you. Sent box: the API has no recipient.
+              subtitle: widget.sent ? 'Sent message' : 'From ${m.sender}',
               onBack: () => Navigator.of(context).maybePop(),
               onMenu: () => _scaffoldKey.currentState?.openDrawer(),
             ),
@@ -467,12 +678,14 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
                                       size: 17,
                                       weight: 700,
                                       color: AppTokens.textPrimary)),
-                              const SizedBox(height: 2),
-                              Text(m.senderRole,
-                                  style: AppTokens.manrope(
-                                      size: 14,
-                                      weight: 400,
-                                      color: AppTokens.textSecondary)),
+                              if (m.senderRole.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(m.senderRole,
+                                    style: AppTokens.manrope(
+                                        size: 14,
+                                        weight: 400,
+                                        color: AppTokens.textSecondary)),
+                              ],
                               const SizedBox(height: 2),
                               Text(m.fullDate,
                                   style: AppTokens.manrope(
@@ -514,23 +727,118 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
                             height: 23,
                             color: AppTokens.textPrimary)),
                   ),
-                  const SizedBox(height: 22),
-                  _ReplyComposer(
-                    controller: _controller,
-                    state: _state,
-                    onChanged: () {
-                      if (_state == _ReplyState.validationError) {
-                        setState(() => _state = _ReplyState.idle);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 18),
-                  _ReplyButton(
-                    state: _state,
-                    onSend: _send,
-                    onRetry: () => setState(() => _state = _ReplyState.idle),
-                    onViewSent: () => Navigator.of(context).maybePop(),
-                  ),
+                  if (m.attachmentUrl != null) ...[
+                    const SizedBox(height: 14),
+                    Material(
+                      color: AppTokens.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => _openAttachment(m.attachmentUrl!),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppTokens.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (m.attachmentIsImage) ...[
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: CachedNetworkImage(
+                                    imageUrl: m.attachmentUrl!,
+                                    height: 180,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, __) => Container(
+                                        height: 180,
+                                        color: AppTokens.lightGreen),
+                                    // Preview failed: keep just the file row.
+                                    errorWidget: (_, __, ___) =>
+                                        const SizedBox.shrink(),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              Row(
+                                children: [
+                                  const Icon(Icons.attach_file,
+                                      color: AppTokens.primary),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      m.attachmentDisplayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTokens.manrope(
+                                          size: 14,
+                                          weight: 600,
+                                          color: AppTokens.textPrimary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                height: 44,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTokens.primary,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
+                                  ),
+                                  onPressed: _downloading
+                                      ? null
+                                      : () => _downloadAttachment(m),
+                                  icon: _downloading
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white))
+                                      : const Icon(Icons.download_rounded,
+                                          color: Colors.white, size: 20),
+                                  label: Text(
+                                      _downloading
+                                          ? 'Downloading…'
+                                          : 'Download attachment',
+                                      style: AppTokens.manrope(
+                                          size: 15,
+                                          weight: 700,
+                                          color: Colors.white)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (!widget.sent) ...[
+                    const SizedBox(height: 22),
+                    _ReplyComposer(
+                      controller: _controller,
+                      state: _state,
+                      onChanged: () {
+                        if (_state == _ReplyState.validationError) {
+                          setState(() => _state = _ReplyState.idle);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    _ReplyButton(
+                      state: _state,
+                      onSend: _send,
+                      // Back to the composer; the typed text is kept.
+                      onRetry: () =>
+                          setState(() => _state = _ReplyState.idle),
+                      onViewSent: () => Navigator.of(context).pop(true),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sevenup_mobile/common/app_bottom_nav.dart';
 import 'package:sevenup_mobile/common/module_header.dart';
 import 'package:sevenup_mobile/common/nav_drawer.dart';
 import 'package:sevenup_mobile/common/skeleton.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
+import 'package:sevenup_mobile/data/api_repository.dart';
 import 'package:sevenup_mobile/models/info_comms.dart';
+import 'package:sevenup_mobile/state/notifications/notification_cubit.dart';
 
 /// Which announcements the list is filtered to.
 enum _AnnFilter { unread, all, read }
@@ -21,17 +24,39 @@ class AnnouncementsPage extends StatefulWidget {
 
 class _AnnouncementsPageState extends State<AnnouncementsPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
-  final List<Announcement> _items = sampleAnnouncements();
+  final _repository = ApiRepository();
+  List<Announcement> _items = [];
   _AnnFilter _filter = _AnnFilter.unread;
   bool _loading = true;
+  bool _error = false;
 
   @override
   void initState() {
     super.initState();
-    // No endpoint yet — briefly show the loading skeleton, then the list.
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (mounted) setState(() => _loading = false);
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (mounted && !_loading) setState(() => _error = false);
+    final res = await _repository.getAnnouncements();
+    if (!mounted) return;
+    final body = res.body;
+    final list =
+        (body != null && body['data'] is List) ? body['data'] as List : null;
+    setState(() {
+      if (list != null) {
+        _items = list
+            .whereType<Map>()
+            .map((e) => Announcement.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+        _error = false;
+      } else {
+        _error = true;
+      }
+      _loading = false;
     });
+    // Keep the header bell in sync with the announcements we just fetched.
+    if (mounted) context.read<NotificationCubit>().load();
   }
 
   List<Announcement> get _visible {
@@ -83,16 +108,29 @@ class _AnnouncementsPageState extends State<AnnouncementsPage> {
             Expanded(
               child: _loading
                   ? const SkeletonCards()
-                  : visible.isEmpty
-                  ? _EmptyFilter(filter: _filter)
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(AppTokens.screenPadding,
-                          8, AppTokens.screenPadding, 24),
-                      itemCount: visible.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 16),
-                      itemBuilder: (_, i) => _AnnouncementCard(
-                        announcement: visible[i],
-                        onTap: () => _open(visible[i]),
+                  : RefreshIndicator(
+                      color: AppTokens.primary,
+                      onRefresh: _load,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(
+                            AppTokens.screenPadding, 8,
+                            AppTokens.screenPadding, 24),
+                        children: [
+                          if (_error && _items.isEmpty)
+                            _ErrorState(onRetry: _load)
+                          else if (visible.isEmpty)
+                            _EmptyFilter(filter: _filter)
+                          else
+                            for (var i = 0; i < visible.length; i++) ...[
+                              _AnnouncementCard(
+                                announcement: visible[i],
+                                onTap: () => _open(visible[i]),
+                              ),
+                              if (i != visible.length - 1)
+                                const SizedBox(height: 16),
+                            ],
+                        ],
                       ),
                     ),
             ),
@@ -139,7 +177,7 @@ class _FilterTabs extends StatelessWidget {
         onTap: () => onSelect(value),
         behavior: HitTestBehavior.opaque,
         child: Container(
-          height: 42,
+          constraints: const BoxConstraints(minHeight: 42),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: active ? AppTokens.primary : Colors.transparent,
@@ -307,6 +345,43 @@ class _EmptyFilter extends StatelessWidget {
   }
 }
 
+class _ErrorState extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _ErrorState({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline,
+                size: 40, color: AppTokens.textSecondary),
+            const SizedBox(height: 12),
+            Text("Couldn't load announcements.",
+                style: AppTokens.manrope(
+                    size: 14, weight: 500, color: AppTokens.textSecondary)),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppTokens.primary),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: onRetry,
+              child: Text('Retry',
+                  style: AppTokens.manrope(
+                      size: 14, weight: 700, color: AppTokens.primary)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Announcement detail (Figma 20C read / 20D not-read). A status banner, the
 /// announcement header and body, and a primary action that marks it as read.
 class AnnouncementDetailPage extends StatefulWidget {
@@ -319,8 +394,30 @@ class AnnouncementDetailPage extends StatefulWidget {
 
 class _AnnouncementDetailPageState extends State<AnnouncementDetailPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _repository = ApiRepository();
+  bool _marking = false;
 
   Announcement get a => widget.announcement;
+
+  Future<void> _markRead() async {
+    if (_marking) return;
+    setState(() => _marking = true);
+    final res = await _repository.markAnnouncementRead(a.id);
+    if (!mounted) return;
+    if (res.isSuccessful) {
+      setState(() {
+        a.read = true;
+        _marking = false;
+      });
+      context.read<NotificationCubit>().load(); // refresh the header bell
+    } else {
+      setState(() => _marking = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+            const SnackBar(content: Text('Could not mark as read.')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -439,10 +536,18 @@ class _AnnouncementDetailPageState extends State<AnnouncementDetailPage> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14)),
                         ),
-                        onPressed: () => setState(() => a.read = true),
-                        child: Text('Mark as read',
-                            style: AppTokens.manrope(
-                                size: 16, weight: 700, color: Colors.white)),
+                        onPressed: _marking ? null : _markRead,
+                        child: _marking
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : Text('Mark as read',
+                                style: AppTokens.manrope(
+                                    size: 16,
+                                    weight: 700,
+                                    color: Colors.white)),
                       ),
                     )
                   else

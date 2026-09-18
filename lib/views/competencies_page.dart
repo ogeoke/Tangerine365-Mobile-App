@@ -3,31 +3,30 @@ import 'package:sevenup_mobile/common/app_bottom_nav.dart';
 import 'package:sevenup_mobile/common/module_header.dart';
 import 'package:sevenup_mobile/common/nav_drawer.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
+import 'package:sevenup_mobile/data/api_repository.dart';
+import 'package:sevenup_mobile/models/competency.dart';
+import 'package:sevenup_mobile/services/app_router.dart';
 
-/// One attained competency (sample data — no backend endpoint yet).
-class _Competency {
-  final String name;
-  final String type; // 'Skill' | 'Attitude'
-  final String assessment; // 'Score' | 'Flag'
-  final int? score; // 0–100 for score-based; null for flag/attained
-  final String lastCompleted;
-  final String required;
-  const _Competency({
-    required this.name,
-    required this.type,
-    required this.assessment,
-    this.score,
-    required this.lastCompleted,
-    this.required = '—',
-  });
+const _monthAbbr = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
+  'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
+String _cap(String s) =>
+    s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+String _fmtDateTime(String iso) {
+  final d = DateTime.tryParse(iso);
+  if (d == null) return '—';
+  final l = d.toLocal();
+  final hh = l.hour.toString().padLeft(2, '0');
+  final mm = l.minute.toString().padLeft(2, '0');
+  return '${l.day.toString().padLeft(2, '0')} ${_monthAbbr[l.month - 1]} '
+      '${l.year} · $hh:$mm';
 }
 
-/// Competencies (Figma 13): attained skills/attitudes with a summary, search
-/// and per-competency cards.
-///
-/// NOTE: there is no competencies endpoint yet (userStats only returns a
-/// `competencies_attained` count, not the list), so the entries below are
-/// sample data wired for an easy swap once a backend endpoint exists.
+/// Competencies (Figma 13): the learner's attained skills/knowledge from
+/// `POST /api/competencies`, with a summary, search and per-competency cards.
 class CompetenciesPage extends StatefulWidget {
   static const routeName = '/competencies';
   const CompetenciesPage({super.key});
@@ -36,38 +35,90 @@ class CompetenciesPage extends StatefulWidget {
   State<CompetenciesPage> createState() => _CompetenciesPageState();
 }
 
-class _CompetenciesPageState extends State<CompetenciesPage> {
+class _CompetenciesPageState extends State<CompetenciesPage>
+    with WidgetsBindingObserver, RouteAware {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _repository = ApiRepository();
+
+  List<Competency> _all = const [];
+  bool _loading = true;
+  bool _error = false;
   String _query = '';
 
-  static const _all = [
-    _Competency(
-      name: 'Time Management',
-      type: 'Skill',
-      assessment: 'Score',
-      score: 95,
-      lastCompleted: '02 Jul 2025 · 16:57',
-    ),
-    _Competency(
-      name: 'Written Communication',
-      type: 'Attitude',
-      assessment: 'Flag',
-      lastCompleted: '02 Jul 2025 · 17:05',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _load();
+  }
 
-  List<_Competency> get _filtered {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() => _load(silent: true);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load(silent: true);
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = false;
+      });
+    }
+    final res = await _repository.getCompetencies();
+    if (!mounted) return;
+    final raw = res.body;
+    final items = raw == null ? null : raw['competencies'];
+    if (items is List) {
+      final list = items
+          .whereType<Map>()
+          .map((e) => Competency.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      setState(() {
+        _all = list;
+        _error = false;
+        _loading = false;
+      });
+    } else if (!silent) {
+      setState(() {
+        _error = true;
+        _loading = false;
+      });
+    }
+  }
+
+  List<Competency> get _filtered {
     if (_query.trim().isEmpty) return _all;
     final q = _query.toLowerCase();
-    return _all.where((c) => c.name.toLowerCase().contains(q)).toList();
+    return _all
+        .where((c) =>
+            c.name.toLowerCase().contains(q) ||
+            c.category.toLowerCase().contains(q))
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final list = _filtered;
     final attained = _all.length;
-    final skills = _all.where((c) => c.type == 'Skill').length;
-    final attitudes = _all.where((c) => c.type == 'Attitude').length;
+    final skills = _all.where((c) => c.typology == 'skill').length;
+    final knowledge = _all.where((c) => c.typology == 'knowledge').length;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -84,70 +135,130 @@ class _CompetenciesPageState extends State<CompetenciesPage> {
               onMenu: () => _scaffoldKey.currentState?.openDrawer(),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                    AppTokens.screenPadding, 16, AppTokens.screenPadding, 24),
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                          child: _SummaryCard(
-                              value: '$attained',
-                              label: 'Attained',
-                              highlight: true)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                          child: _SummaryCard(
-                              value: '$skills', label: 'Skill')),
-                      const SizedBox(width: 12),
-                      Expanded(
-                          child: _SummaryCard(
-                              value: '$attitudes',
-                              label: 'Attitude',
-                              highlight: true)),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  _SearchBar(onChanged: (v) => setState(() => _query = v)),
-                  const SizedBox(height: 20),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Expanded(
-                        child: Text('Attained competencies',
-                            style: AppTokens.manrope(
-                                size: 20,
-                                weight: 700,
-                                color: AppTokens.textPrimary)),
+              child: _loading
+                  ? const Center(
+                      child:
+                          CircularProgressIndicator(color: AppTokens.primary))
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      color: AppTokens.primary,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(
+                            AppTokens.screenPadding, 16,
+                            AppTokens.screenPadding, 24),
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                  child: _SummaryCard(
+                                      value: '$attained',
+                                      label: 'Attained',
+                                      highlight: true)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                  child: _SummaryCard(
+                                      value: '$skills', label: 'Skill')),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                  child: _SummaryCard(
+                                      value: '$knowledge',
+                                      label: 'Knowledge',
+                                      highlight: true)),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          _SearchBar(
+                              onChanged: (v) => setState(() => _query = v)),
+                          const SizedBox(height: 20),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Expanded(
+                                child: Text('Attained competencies',
+                                    style: AppTokens.manrope(
+                                        size: 20,
+                                        weight: 700,
+                                        color: AppTokens.textPrimary)),
+                              ),
+                              Text('${list.length} total',
+                                  style: AppTokens.manrope(
+                                      size: 13,
+                                      weight: 600,
+                                      color: AppTokens.primary)),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          if (_error)
+                            _EmptyState(
+                              icon: Icons.error_outline,
+                              message: "Couldn't load your competencies.",
+                              action: 'Retry',
+                              onAction: _load,
+                            )
+                          else if (_all.isEmpty)
+                            const _EmptyState(
+                              icon: Icons.verified_outlined,
+                              message: 'You have no competencies yet. Complete '
+                                  'a course to attain one.',
+                            )
+                          else if (list.isEmpty)
+                            const _EmptyState(
+                              icon: Icons.search_off,
+                              message: 'No competencies match your search.',
+                            )
+                          else
+                            for (final c in list) ...[
+                              _CompetencyCard(competency: c),
+                              const SizedBox(height: 16),
+                            ],
+                        ],
                       ),
-                      Text('${list.length} total',
-                          style: AppTokens.manrope(
-                              size: 13,
-                              weight: 600,
-                              color: AppTokens.primary)),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  if (list.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 48),
-                      child: Center(
-                        child: Text('No competencies match your search.',
-                            style: AppTokens.manrope(
-                                size: 14,
-                                weight: 500,
-                                color: AppTokens.textSecondary)),
-                      ),
-                    )
-                  else
-                    for (final c in list) ...[
-                      _CompetencyCard(competency: c),
-                      const SizedBox(height: 16),
-                    ],
-                ],
-              ),
+                    ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final String? action;
+  final VoidCallback? onAction;
+  const _EmptyState(
+      {required this.icon, required this.message, this.action, this.onAction});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 44),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(icon, size: 40, color: AppTokens.textSecondary),
+            const SizedBox(height: 12),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: AppTokens.manrope(
+                    size: 14, weight: 500, color: AppTokens.textSecondary)),
+            if (action != null) ...[
+              const SizedBox(height: 16),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppTokens.primary),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: onAction,
+                child: Text(action!,
+                    style: AppTokens.manrope(
+                        size: 14, weight: 700, color: AppTokens.primary)),
+              ),
+            ],
           ],
         ),
       ),
@@ -218,14 +329,16 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _CompetencyCard extends StatelessWidget {
-  final _Competency competency;
+  final Competency competency;
   const _CompetencyCard({required this.competency});
 
   @override
   Widget build(BuildContext context) {
     final c = competency;
-    final scoreValue =
-        c.score != null ? '${c.score} / 100' : 'Attained ✓';
+    final scoreValue = c.isFlag
+        ? 'Attained ✓'
+        : '${c.score == null ? '—' : c.score!.round()} / 100';
+    final badge = c.isFlag ? '✓' : '${c.score == null ? '—' : c.score!.round()}';
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -251,18 +364,20 @@ class _CompetencyCard extends StatelessWidget {
                   color: AppTokens.lightGreen,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(c.score != null ? '${c.score}' : '✓',
+                child: Text(badge,
                     style: AppTokens.manrope(
                         size: 16, weight: 700, color: AppTokens.primary)),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
             children: [
-              _Tag(label: c.type, green: true),
-              const SizedBox(width: 10),
-              _Tag(label: c.assessment, green: false),
+              if (c.typology.isNotEmpty)
+                _Tag(label: _cap(c.typology), green: true),
+              _Tag(label: _cap(c.type), green: false),
             ],
           ),
           const SizedBox(height: 16),
@@ -276,15 +391,15 @@ class _CompetencyCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _InfoRow(
-            label: 'Last completed',
-            child: Text(c.lastCompleted,
+            label: 'Date attained',
+            child: Text(_fmtDateTime(c.dateAttained),
                 style: AppTokens.manrope(
                     size: 14, weight: 600, color: AppTokens.textPrimary)),
           ),
           const SizedBox(height: 12),
           _InfoRow(
-            label: 'Required',
-            child: Text(c.required,
+            label: 'Category',
+            child: Text(c.category.isEmpty ? '—' : c.category,
                 style: AppTokens.manrope(
                     size: 14, weight: 600, color: AppTokens.textSecondary)),
           ),
@@ -330,7 +445,8 @@ class _InfoRow extends StatelessWidget {
               style: AppTokens.manrope(
                   size: 14, weight: 400, color: AppTokens.textSecondary)),
         ),
-        child,
+        const SizedBox(width: 12),
+        Flexible(child: child),
       ],
     );
   }

@@ -38,7 +38,7 @@ class LoginState extends Equatable {
     if (kDebugMode) {
       print('''LoginState:
    { username: $username,
-     password: $password,
+     password: ***,
      errorMessage: $errorMessage,
      isLoading: $isLoading,
      challenge: ${challenge?.method}

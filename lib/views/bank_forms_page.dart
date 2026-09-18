@@ -241,6 +241,8 @@ class _FormCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(form.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTokens.manrope(
                             size: 17,
                             weight: 700,

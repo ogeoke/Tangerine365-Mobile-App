@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
+import 'package:sevenup_mobile/constants/env.dart';
 import 'package:flutter/services.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -54,10 +56,9 @@ class QuickTourPageState extends State<PlayCoursePage> {
     // print(widget.url);
     _setOrientation();
     url = widget.url;
-    print('console:: ${widget.url}');
     controller = WebViewController()
       ..setOnConsoleMessage((m) {
-        print('console:: ${m.message}');
+        if (kDebugMode) print('console:: ${m.message}');
         if (m.message.contains('Close SCORM')) {
           Navigator.of(context).maybePop();
         }
@@ -113,16 +114,14 @@ class QuickTourPageState extends State<PlayCoursePage> {
             });
           },
           onHttpError: (HttpResponseError error) {
-            print(error.toString());
+            if (kDebugMode) print(error.toString());
             refreshController.refreshFailed();
           },
           onWebResourceError: (error) {
-            print(error.toString());
+            if (kDebugMode) print(error.toString());
             refreshController.refreshFailed();
           },
-          onUrlChange: (change) {
-            print('change.url::: ${change.url}');
-          },
+          onUrlChange: (change) {},
           // url = Uri.tryParse(change.url ?? '');
           // url = url?.replace(queryParameters: {
           //   'auth': widget.auth,
@@ -130,8 +129,14 @@ class QuickTourPageState extends State<PlayCoursePage> {
           // });
           // controller.loadRequest(url!);
           // },
+          // Course content is author-uploaded: keep the player on the LMS
+          // host so a hostile package can't navigate it off-site.
           onNavigationRequest: (NavigationRequest request) {
-            return NavigationDecision.navigate;
+            final host = Uri.tryParse(request.url)?.host;
+            final lms = Uri.tryParse(GetIt.I<Env>().baseUrl)?.host;
+            return (host == null || host.isEmpty || host == lms)
+                ? NavigationDecision.navigate
+                : NavigationDecision.prevent;
           },
         ),
       )

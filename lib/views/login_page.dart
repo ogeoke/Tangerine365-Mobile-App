@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:sevenup_mobile/common/app_dialog.dart';
@@ -8,10 +9,18 @@ import 'package:sevenup_mobile/common/authlistener.dart';
 import 'package:sevenup_mobile/constants/app_assets.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
 import 'package:sevenup_mobile/services/biometrics_service.dart';
+import 'package:sevenup_mobile/services/two_factor_api.dart';
+import 'package:sevenup_mobile/state/settings/settings_cubit.dart';
 import 'package:sevenup_mobile/state/auth/index.dart';
 import 'package:sevenup_mobile/state/login/index.dart';
 import 'package:sevenup_mobile/views/biometric_flow.dart';
 import 'package:sevenup_mobile/views/two_factor_flow.dart';
+
+part 'forgot_password_page.dart';
+
+/// QA only: `--dart-define=SHOW_FORGOT_PASSWORD=true` shows the link even when
+/// the admin switch is off/absent. Never set this for client builds.
+const _kForceForgotPassword = bool.fromEnvironment('SHOW_FORGOT_PASSWORD');
 
 /// Approved Login screen (Figma 00 • Login): blurred e-learning background with
 /// a soft veil, the Tangerine365 logo, email/staff-ID + password fields, and a
@@ -63,6 +72,10 @@ class LoginPageState extends State<LoginPage> {
   void _login() {
     _usernameNode.unfocus();
     _passwordNode.unfocus();
+    // Submitting from the keyboard's Done key can leave the IME open over the
+    // next screen — close it explicitly.
+    FocusManager.instance.primaryFocus?.unfocus();
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     if (_formKey.currentState?.validate() == true) {
       _bloc.add(
         LoginPressedEvent(_usernameController.text, _passwordController.text),
@@ -91,10 +104,11 @@ class LoginPageState extends State<LoginPage> {
   }
 
   void _forgotPassword() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Please contact your administrator to reset your password.',
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordPage(
+          initialUsername: _usernameController.text.trim(),
         ),
       ),
     );
@@ -119,12 +133,14 @@ class LoginPageState extends State<LoginPage> {
             if (challenge != null && !_navigating2fa) {
               _navigating2fa = true;
               Navigator.of(context)
-                  .push(MaterialPageRoute(
-                    builder: (_) => twoFactorEntry(
-                      challenge,
-                      () => _bloc.add(TwoFactorVerifiedEvent(challenge)),
+                  .push(
+                    MaterialPageRoute(
+                      builder: (_) => twoFactorEntry(
+                        challenge,
+                        () => _bloc.add(TwoFactorVerifiedEvent(challenge)),
+                      ),
                     ),
-                  ))
+                  )
                   .then((_) => _navigating2fa = false);
             }
           },
@@ -153,8 +169,10 @@ class LoginPageState extends State<LoginPage> {
                                 ),
                               ),
                               const SizedBox(height: 34),
-                              Text('Welcome back',
-                                  style: AppTokens.loginHeading),
+                              Text(
+                                'Welcome back',
+                                style: AppTokens.loginHeading,
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 'Sign in to continue your learning journey.',
@@ -180,21 +198,36 @@ class LoginPageState extends State<LoginPage> {
                                 isPassword: true,
                                 onSubmitted: _login,
                               ),
-                              const SizedBox(height: 12),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: GestureDetector(
-                                  onTap: _forgotPassword,
-                                  child: Text(
-                                    'Forgot password?',
-                                    style: AppTokens.manrope(
-                                      size: 12,
-                                      weight: 600,
-                                      color: AppTokens.accent,
+                              // Shown only when the admin has enabled
+                              // password recovery (app/settings flag).
+                              if (_kForceForgotPassword ||
+                                  context
+                                          .watch<SettingsCubit>()
+                                          .state
+                                          .data
+                                          ?.forgotPasswordEnabled ==
+                                      true) ...[
+                                const SizedBox(height: 12),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: GestureDetector(
+                                    onTap: _forgotPassword,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      child: Text(
+                                        'Forgot password?',
+                                        style: AppTokens.manrope(
+                                          size: 12,
+                                          weight: 600,
+                                          color: AppTokens.accent,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
+                              ],
                               const SizedBox(height: 24),
                               _PrimaryButton(
                                 label: 'Sign in',
@@ -206,8 +239,9 @@ class LoginPageState extends State<LoginPage> {
                               if (GetIt.I<AuthBloc>().state.useBiometrics) ...[
                                 const SizedBox(height: 16),
                                 _BiometricButton(
-                                  onPressed:
-                                      state.isLoading ? null : _biometricLogin,
+                                  onPressed: state.isLoading
+                                      ? null
+                                      : _biometricLogin,
                                 ),
                               ],
                               const SizedBox(height: 16),
@@ -397,8 +431,9 @@ class _AuthFieldState extends State<_AuthField> {
           keyboardType: widget.keyboardType,
           obscureText: widget.isPassword && _obscure,
           autovalidateMode: AutovalidateMode.onUserInteraction,
-          textInputAction:
-              widget.isPassword ? TextInputAction.done : TextInputAction.next,
+          textInputAction: widget.isPassword
+              ? TextInputAction.done
+              : TextInputAction.next,
           onFieldSubmitted: (_) => widget.onSubmitted?.call(),
           validator: (t) => (t?.isNotEmpty == true)
               ? null
@@ -418,8 +453,10 @@ class _AuthFieldState extends State<_AuthField> {
             filled: true,
             fillColor: Colors.white,
             isDense: true,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 16,
+            ),
             prefixIcon: Icon(widget.icon, color: AppTokens.primary, size: 20),
             suffixIcon: widget.isPassword
                 ? IconButton(
@@ -437,8 +474,10 @@ class _AuthFieldState extends State<_AuthField> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppTokens.loginInputRadius),
-              borderSide:
-                  const BorderSide(color: AppTokens.primary, width: 1.4),
+              borderSide: const BorderSide(
+                color: AppTokens.primary,
+                width: 1.4,
+              ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppTokens.loginInputRadius),
@@ -504,10 +543,10 @@ class _AppTextFieldState extends State<AppTextField> {
             child: Text(
               widget.label!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    color: Theme.of(context).primaryColor,
-                  ),
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: Theme.of(context).primaryColor,
+              ),
             ),
           ),
         TextFormField(
@@ -523,11 +562,11 @@ class _AppTextFieldState extends State<AppTextField> {
           focusNode: widget.focusNode,
           onChanged: widget.onChanged,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.black,
-                fontWeight: FontWeight.w400,
-                fontSize: 14,
-                letterSpacing: 1.5,
-              ),
+            color: Colors.black,
+            fontWeight: FontWeight.w400,
+            fontSize: 14,
+            letterSpacing: 1.5,
+          ),
           decoration: InputDecoration(
             labelText: widget.hint,
             labelStyle: const TextStyle(color: Colors.grey, fontSize: 13),

@@ -1,5 +1,6 @@
 import 'package:sevenup_mobile/gen/fonts.gen.dart';
 import 'package:flutter/material.dart';
+import 'package:sevenup_mobile/common/safety.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -30,7 +31,7 @@ class HtmlBuilder extends StatelessWidget {
             ),
           ],
           onLinkTap: (uri, v, a) {
-            launchUrl(Uri.parse(uri ?? ''));
+            openExternalUrl(uri);
           },
           style: {
             'body': Style(padding: HtmlPaddings.zero),

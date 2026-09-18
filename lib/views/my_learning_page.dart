@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:sevenup_mobile/common/nav_drawer.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
 import 'package:sevenup_mobile/data/api_repository.dart';
 import 'package:sevenup_mobile/models/stats.dart';
+import 'package:sevenup_mobile/services/app_router.dart';
 
 // Course-status colours (Figma 08).
 const _cCompleted = Color(0xFF4CA23A);
@@ -15,6 +17,12 @@ const _cNotStarted = Color(0xFF5AAAD9);
 const _cWaiting = Color(0xFFE8412C);
 
 const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+// Map weekday index (0=Mon) to the userStats weekly_activity keys.
+const _weekKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+/// Trim a score to a clean label (90 not 90.0, 90.5 kept).
+String _scoreLabel(num s) =>
+    s == s.roundToDouble() ? s.round().toString() : s.toStringAsFixed(1);
 const _monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'
@@ -36,31 +44,71 @@ class MyLearningPage extends StatefulWidget {
   State<MyLearningPage> createState() => _MyLearningPageState();
 }
 
-class _MyLearningPageState extends State<MyLearningPage> {
+class _MyLearningPageState extends State<MyLearningPage>
+    with WidgetsBindingObserver, RouteAware {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _repository = ApiRepository();
+
+  /// How often the stats refresh while the screen is open.
+  static const _refreshEvery = Duration(seconds: 30);
 
   Stats? _stats;
   bool _loading = true;
   bool _error = false;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+    // Periodic auto-refresh while the screen is open (silent — no spinner).
+    _timer = Timer.periodic(_refreshEvery, (_) => _load(silent: true));
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = false;
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes so we can refresh when this screen is
+    // revealed again after a pushed page is popped.
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    routeObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Returning to this screen from a pushed page → refresh silently.
+  @override
+  void didPopNext() => _load(silent: true);
+
+  /// App brought back to the foreground → refresh silently.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load(silent: true);
+  }
+
+  /// [silent] keeps existing content on screen (no full-screen spinner) — used
+  /// by the auto-refreshes; the first load and pull-to-refresh are not silent.
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = false;
+      });
+    }
     final res = await _repository.getStats();
     if (!mounted) return;
     setState(() {
       if (res.body is Stats) {
         _stats = res.body as Stats;
-      } else {
+        _error = false;
+      } else if (!silent) {
         _error = true;
       }
       _loading = false;
@@ -80,6 +128,17 @@ class _MyLearningPageState extends State<MyLearningPage> {
     return '${d.day} ${_monthAbbr[d.month - 1]}';
   }
 
+  /// Minutes → compact duration ("9m", "1h", "2h 15m"). Null → "—", zero → "0m".
+  String _fmtDuration(int? m) {
+    if (m == null) return '—';
+    if (m <= 0) return '0m';
+    if (m < 60) return '${m}m';
+    final h = m ~/ 60;
+    final rem = m % 60;
+    return rem == 0 ? '${h}h' : '${h}h ${rem}m';
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final ca = _stats?.courseAttendance;
@@ -96,6 +155,11 @@ class _MyLearningPageState extends State<MyLearningPage> {
     final certificates = _val(_stats?.certificatesAttained);
     final competencies = _val(_stats?.competenciesAttained);
     final lastLogin = _fmtDate(_stats?.lastLogin);
+    final timeSpent = _fmtDuration(_stats?.timeSpentMinutes);
+    final avgScore = _stats?.avgAssessmentScore;
+    final streak = _stats?.learningStreakDays;
+    final recentScores = _stats?.recentAssessmentScores ?? const <num>[];
+    final weekly = _stats?.weeklyActivity;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -173,8 +237,7 @@ class _MyLearningPageState extends State<MyLearningPage> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _OverviewCard(
-                                  // No time-spent field in userStats.
-                                  value: '—',
+                                  value: timeSpent,
                                   label: 'Time spent',
                                   bg: const Color(0xFFE7EEF5),
                                   valueColor: AppTokens.textPrimary,
@@ -195,7 +258,7 @@ class _MyLearningPageState extends State<MyLearningPage> {
                             hasError: _error,
                           ),
                           const SizedBox(height: 18),
-                          const _WeeklyLearningCard(),
+                          _WeeklyLearningCard(activity: weekly),
                           const SizedBox(height: 22),
                           Text('Performance',
                               style: AppTokens.manrope(
@@ -207,20 +270,22 @@ class _MyLearningPageState extends State<MyLearningPage> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // No assessment-score endpoint yet.
                                 Expanded(
                                   child: _PerfCard(
-                                    value: '—',
+                                    value: avgScore == null
+                                        ? '—'
+                                        : '${_scoreLabel(avgScore)}%',
                                     label: 'Average assessment score',
                                     bg: const Color(0xFFEAF3E6),
                                     valueColor: AppTokens.primary,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                // No learning-streak endpoint yet.
                                 Expanded(
                                   child: _PerfCard(
-                                    value: '—',
+                                    value: streak == null
+                                        ? '—'
+                                        : '$streak ${streak == 1 ? 'day' : 'days'}',
                                     label: 'Current learning streak',
                                     bg: const Color(0xFFFBEDE6),
                                     valueColor: AppTokens.accent,
@@ -230,7 +295,7 @@ class _MyLearningPageState extends State<MyLearningPage> {
                             ),
                           ),
                           const SizedBox(height: 18),
-                          const _AssessmentTrendCard(),
+                          _AssessmentTrendCard(scores: recentScores),
                           const SizedBox(height: 18),
                           _LearningHighlightsCard(
                             certificates: certificates,
@@ -398,6 +463,8 @@ class _LegendRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTokens.manrope(
                   size: 15, weight: 500, color: AppTokens.textPrimary)),
         ),
@@ -529,13 +596,21 @@ class _PerfCard extends StatelessWidget {
   }
 }
 
-/// Assessment score trend (Figma 08). No assessment-score endpoint yet, so this
-/// shows the card layout with an "unavailable" state.
+/// Assessment score trend (Figma 08) — the last few assessment scores from
+/// userStats (`recent_assessment_scores`), newest last. Shows an empty state
+/// when the learner has no completed assessments.
 class _AssessmentTrendCard extends StatelessWidget {
-  const _AssessmentTrendCard();
+  final List<num> scores;
+  const _AssessmentTrendCard({required this.scores});
 
   @override
   Widget build(BuildContext context) {
+    final has = scores.isNotEmpty;
+    // Show up to the last five scores, oldest→newest.
+    final shown = has
+        ? scores.sublist(scores.length > 5 ? scores.length - 5 : 0)
+        : const <num>[];
+    final latest = has ? scores.last : null;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -552,7 +627,7 @@ class _AssessmentTrendCard extends StatelessWidget {
                     style: AppTokens.manrope(
                         size: 20, weight: 700, color: AppTokens.textPrimary)),
               ),
-              Text('—',
+              Text(latest == null ? '—' : '${_scoreLabel(latest)}%',
                   style: AppTokens.manrope(
                       size: 16, weight: 700, color: AppTokens.primary)),
             ],
@@ -561,15 +636,63 @@ class _AssessmentTrendCard extends StatelessWidget {
           Text('Last five completed assessments',
               style: AppTokens.manrope(
                   size: 13, weight: 400, color: AppTokens.textSecondary)),
-          const SizedBox(height: 28),
-          Center(
-            child: Text('Assessment data isn’t available yet.',
-                style: AppTokens.manrope(
-                    size: 12, weight: 500, color: AppTokens.textSecondary)),
-          ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
+          if (!has)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('No assessments completed yet.',
+                    style: AppTokens.manrope(
+                        size: 12, weight: 500, color: AppTokens.textSecondary)),
+              ),
+            )
+          else
+            SizedBox(
+              height: 150,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (final s in shown)
+                    _ScoreBar(score: s.toDouble().clamp(0, 100)),
+                ],
+              ),
+            ),
         ],
       ),
+    );
+  }
+}
+
+/// A single labelled bar (0–100) in the assessment trend chart.
+class _ScoreBar extends StatelessWidget {
+  final double score;
+  const _ScoreBar({required this.score});
+
+  @override
+  Widget build(BuildContext context) {
+    const maxBar = 110.0;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text('${_scoreLabel(score)}%',
+            style: AppTokens.manrope(
+                size: 11, weight: 700, color: AppTokens.textSecondary)),
+        const SizedBox(height: 6),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: (score / 100) * maxBar),
+          duration: const Duration(milliseconds: 700),
+          curve: Curves.easeOutCubic,
+          builder: (_, h, __) => Container(
+            width: 26,
+            height: h < 4 ? 4 : h,
+            decoration: BoxDecoration(
+              color: AppTokens.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -675,14 +798,29 @@ class _MiniStat extends StatelessWidget {
   }
 }
 
-/// Weekly learning time (Figma 08). There is no per-day learning-time endpoint
-/// yet, so this shows the layout with an "unavailable" state rather than fake
-/// data.
+/// Weekly learning time (Figma 08) — per-day minutes from userStats
+/// (`weekly_activity`), bars scaled to the busiest day. Header shows the
+/// week total. Shows an "unavailable" state only when the field is absent.
 class _WeeklyLearningCard extends StatelessWidget {
-  const _WeeklyLearningCard();
+  final Map<String, int>? activity;
+  const _WeeklyLearningCard({required this.activity});
 
   @override
   Widget build(BuildContext context) {
+    final a = activity;
+    final values = [for (final k in _weekKeys) (a?[k] ?? 0)];
+    final total = values.fold<int>(0, (s, v) => s + v);
+    final maxV = values.fold<int>(0, (m, v) => v > m ? v : m);
+    const trackH = 120.0;
+
+    String header() {
+      if (a == null) return '—';
+      if (total < 60) return '${total}m';
+      final h = total ~/ 60;
+      final r = total % 60;
+      return r == 0 ? '${h}h' : '${h}h ${r}m';
+    }
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -699,7 +837,7 @@ class _WeeklyLearningCard extends StatelessWidget {
                     style: AppTokens.manrope(
                         size: 20, weight: 700, color: AppTokens.textPrimary)),
               ),
-              Text('—',
+              Text(header(),
                   style: AppTokens.manrope(
                       size: 18, weight: 700, color: AppTokens.primary)),
             ],
@@ -709,44 +847,90 @@ class _WeeklyLearningCard extends StatelessWidget {
               style: AppTokens.manrope(
                   size: 13, weight: 400, color: AppTokens.textSecondary)),
           const SizedBox(height: 24),
-          // Empty track bars — no learning-time data available yet.
-          SizedBox(
-            height: 150,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (final d in _weekdays)
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Container(
-                        width: 18,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEDEFEC),
-                          borderRadius: BorderRadius.circular(9),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(d,
-                          style: AppTokens.manrope(
-                              size: 11,
-                              weight: 400,
-                              color: AppTokens.textSecondary)),
-                    ],
-                  ),
-              ],
+          if (a == null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('Learning-time data isn’t available yet.',
+                    style: AppTokens.manrope(
+                        size: 12, weight: 500, color: AppTokens.textSecondary)),
+              ),
+            )
+          else
+            SizedBox(
+              height: 150,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (var i = 0; i < _weekdays.length; i++)
+                    _DayBar(
+                      label: _weekdays[i],
+                      minutes: values[i],
+                      fraction: maxV == 0 ? 0 : values[i] / maxV,
+                      trackHeight: trackH,
+                    ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: Text('Learning-time data isn’t available yet.',
-                style: AppTokens.manrope(
-                    size: 12, weight: 500, color: AppTokens.textSecondary)),
-          ),
         ],
       ),
+    );
+  }
+}
+
+/// One day column in the weekly chart: a grey track with a green fill scaled to
+/// that day's share of the busiest day.
+class _DayBar extends StatelessWidget {
+  final String label;
+  final int minutes;
+  final double fraction;
+  final double trackHeight;
+  const _DayBar({
+    required this.label,
+    required this.minutes,
+    required this.fraction,
+    required this.trackHeight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            Container(
+              width: 18,
+              height: trackHeight,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDEFEC),
+                borderRadius: BorderRadius.circular(9),
+              ),
+            ),
+            TweenAnimationBuilder<double>(
+              tween: Tween(
+                  begin: 0,
+                  end: (fraction * trackHeight).clamp(0, trackHeight)),
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOutCubic,
+              builder: (_, h, __) => Container(
+                width: 18,
+                height: minutes > 0 && h < 6 ? 6 : h,
+                decoration: BoxDecoration(
+                  color: AppTokens.primary,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(label,
+            style: AppTokens.manrope(
+                size: 11, weight: 400, color: AppTokens.textSecondary)),
+      ],
     );
   }
 }

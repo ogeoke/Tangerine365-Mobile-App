@@ -145,6 +145,8 @@ class _RateTableCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(table.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTokens.manrope(
                             size: 17,
                             weight: 700,
@@ -308,6 +310,7 @@ class _NafexRatesPageState extends State<NafexRatesPage> {
                       ),
                     ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           flex: 5,
@@ -315,6 +318,8 @@ class _NafexRatesPageState extends State<NafexRatesPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(r.country,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTokens.manrope(
                                       size: 16,
                                       weight: 700,

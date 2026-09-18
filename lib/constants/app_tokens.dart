@@ -89,6 +89,11 @@ class AppTokens {
 
   // New Home (Figma 01): inactive/"coming soon" service cards are grey with
   // white icon art + text; only the active Courses card is green.
+  // Home cards alternate green / orange in a checkerboard:
+  // Courses (green) · Repository (orange) / Banking (orange) · Information (green)
+  static const Color moduleRepositoryActiveBg = accent;
+  static const Color moduleBankingActiveBg = accent;
+  static const Color moduleInfoActiveBg = moduleCoursesBg;
   static const Color moduleComingSoonBg = Color(0xFFC0C4C1);
 
   // ---------------------------------------------------------------------------
@@ -107,6 +112,10 @@ class AppTokens {
   static const double authPadding = 40.0;
   static const double cardRadius = 14.0;
   static const double moduleCardRadius = 20.0;
+
+  /// Strength of the texture on active module cards (0 = flat colour,
+  /// 1 = as designed). Lower it for very light client colours.
+  static const double moduleTextureOpacity = 1.0;
   static const double analyticsCardRadius = 16.0;
   static const double authButtonRadius = 25.0;
   static const double secondaryButtonRadius = 23.0;

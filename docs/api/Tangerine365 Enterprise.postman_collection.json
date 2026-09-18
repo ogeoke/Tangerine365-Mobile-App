@@ -35,7 +35,7 @@
             },
             {
               "key": "password",
-              "value": "zercom",
+              "value": "<REDACTED>",
               "type": "text",
               "description": "tester password"
             }
@@ -59,7 +59,7 @@
             },
             {
               "key": "password",
-              "value": "zercom",
+              "value": "<REDACTED>",
               "disabled": true
             }
           ]
@@ -94,7 +94,7 @@
                 },
                 {
                   "key": "password",
-                  "value": "tester123456",
+                  "value": "<REDACTED>",
                   "type": "text",
                   "description": "Password used to authenticate user"
                 }
@@ -1190,7 +1190,7 @@
             },
             {
               "key": "auth",
-              "value": "1d0362ef23bc4c06b96aed18eb89954b",
+              "value": "<REDACTED_TOKEN>",
               "disabled": true
             }
           ]
@@ -1247,7 +1247,7 @@
                 },
                 {
                   "key": "auth",
-                  "value": "1d0362ef23bc4c06b96aed18eb899556",
+                  "value": "<REDACTED_TOKEN>",
                   "disabled": true
                 }
               ]
@@ -1356,7 +1356,7 @@
             },
             {
               "key": "auth",
-              "value": "1d0362ef23bc4c06b96aed18eb89954b",
+              "value": "<REDACTED_TOKEN>",
               "disabled": true
             }
           ]
@@ -1415,7 +1415,7 @@
                 },
                 {
                   "key": "auth",
-                  "value": "1d0362ef23bc4c06b96aed18eb899556",
+                  "value": "<REDACTED_TOKEN>",
                   "disabled": true
                 }
               ]
@@ -2457,7 +2457,7 @@
             },
             {
               "key": "auth",
-              "value": "1d0362ef23bc4c06b96aed18eb89954b",
+              "value": "<REDACTED_TOKEN>",
               "disabled": true
             }
           ]
@@ -2514,7 +2514,7 @@
                 },
                 {
                   "key": "auth",
-                  "value": "1d0362ef23bc4c06b96aed18eb899556",
+                  "value": "<REDACTED_TOKEN>",
                   "disabled": true
                 }
               ]
@@ -2621,7 +2621,7 @@
             },
             {
               "key": "auth",
-              "value": "1d0362ef23bc4c06b96aed18eb89954b",
+              "value": "<REDACTED_TOKEN>",
               "disabled": true
             }
           ]
@@ -2678,7 +2678,7 @@
                 },
                 {
                   "key": "auth",
-                  "value": "1d0362ef23bc4c06b96aed18eb899556",
+                  "value": "<REDACTED_TOKEN>",
                   "disabled": true
                 }
               ]
@@ -2785,7 +2785,7 @@
             },
             {
               "key": "auth",
-              "value": "1d0362ef23bc4c06b96aed18eb89954b",
+              "value": "<REDACTED_TOKEN>",
               "disabled": true
             }
           ]
@@ -2842,7 +2842,7 @@
                 },
                 {
                   "key": "auth",
-                  "value": "1d0362ef23bc4c06b96aed18eb89954b",
+                  "value": "<REDACTED_TOKEN>",
                   "disabled": true
                 }
               ]
@@ -3831,7 +3831,7 @@
             },
             {
               "key": "password",
-              "value": "zercom",
+              "value": "<REDACTED>",
               "disabled": true
             }
           ]
@@ -3894,7 +3894,7 @@
                 },
                 {
                   "key": "password",
-                  "value": "zercom",
+                  "value": "<REDACTED>",
                   "disabled": true
                 }
               ]
@@ -4726,7 +4726,7 @@
             },
             {
               "key": "password",
-              "value": "tester123",
+              "value": "<REDACTED>",
               "type": "text",
               "description": "(if not specified password will be generated and sent to the user)"
             },
@@ -4807,7 +4807,7 @@
                 },
                 {
                   "key": "password",
-                  "value": "tester123",
+                  "value": "<REDACTED>",
                   "type": "text",
                   "description": "(if not specified password will be generated and sent to the user)"
                 },
@@ -4934,7 +4934,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"auth\": \"{{token}}\",\n  \"users\": [\n    {\n      \"username\": \"testuser1\",\n      \"firstname\": \"username\",\n      \"lastname\": \"mylastname\",\n      \"password\": \"tester123\",\n      \"email\": \"testuser1@email.com\",\n      \"role\": \"user\",\n      \"valid\": 1,\n      \"orgid\": 15\n    },\n    {\n      \"username\": \"testuser2\",\n      \"firstname\": \"jane\",\n      \"lastname\": \"doe\",\n      \"password\": \"secret456\",\n      \"email\": \"testuser2@email.com\",\n      \"role\": \"user\",\n      \"valid\": 1,\n      \"orgid\": 15\n    }\n  ]\n}\n",
+          "raw": "{\n  \"auth\": \"{{token}}\",\n  \"users\": [\n    {\n      \"username\": \"testuser1\",\n      \"firstname\": \"username\",\n      \"lastname\": \"mylastname\",\n      \"password\": \"<REDACTED>\",\n      \"email\": \"testuser1@email.com\",\n      \"role\": \"user\",\n      \"valid\": 1,\n      \"orgid\": 15\n    },\n    {\n      \"username\": \"testuser2\",\n      \"firstname\": \"jane\",\n      \"lastname\": \"doe\",\n      \"password\": \"<REDACTED>\",\n      \"email\": \"testuser2@email.com\",\n      \"role\": \"user\",\n      \"valid\": 1,\n      \"orgid\": 15\n    }\n  ]\n}\n",
           "options": {
             "raw": {
               "language": "json"
@@ -5000,7 +5000,7 @@
                 },
                 {
                   "key": "users[0][password]",
-                  "value": "tester123",
+                  "value": "<REDACTED>",
                   "type": "text",
                   "description": "(if not specified password will be generated and sent to the user)"
                 },
@@ -5045,7 +5045,7 @@
                 },
                 {
                   "key": "users[1][password]",
-                  "value": "secret456",
+                  "value": "<REDACTED>",
                   "type": "text"
                 },
                 {

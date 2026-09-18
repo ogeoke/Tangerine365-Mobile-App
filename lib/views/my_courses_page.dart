@@ -31,18 +31,14 @@ class MyCoursesPage extends StatelessWidget {
     // print(context.watch<CourseCubit>().state.recentlyViewed);
     return Column(
       children: [
-        if (context.watch<CourseCubit>().state.myCourses?.isNotEmpty == true)
+        if (context.watch<CourseCubit>().state.enrolledCourses?.isNotEmpty ==
+            true)
           CourseHorizontalList(
             myCourseType: MyCourseType.myCourses,
             courseCubit: context.read<CourseCubit>(),
             title: '',
-            courses: context
-                    .watch<CourseCubit>()
-                    .state
-                    .myCourses
-                    ?.map((e) => e.course)
-                    .toList() ??
-                [],
+            courses:
+                context.watch<CourseCubit>().state.enrolledCourses ?? [],
           ),
         const SizedBox(height: 11),
         BlocBuilder<CourseCubit, CourseState>(

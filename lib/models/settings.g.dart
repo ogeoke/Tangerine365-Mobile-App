@@ -12,6 +12,7 @@ Settings _$SettingsFromJson(Map<String, dynamic> json) => Settings(
       appSupportEmail: json['app_support_email'] as String?,
       enableBanner: json['enable_banner'] as String?,
       maintenanceMode: json['maintenance_mode'] as String?,
+      enableForgotPassword: json['enable_forgot_password']?.toString(),
     );
 
 Map<String, dynamic> _$SettingsToJson(Settings instance) => <String, dynamic>{
@@ -20,4 +21,5 @@ Map<String, dynamic> _$SettingsToJson(Settings instance) => <String, dynamic>{
       'app_support_email': instance.appSupportEmail,
       'enable_banner': instance.enableBanner,
       'maintenance_mode': instance.maintenanceMode,
+      'enable_forgot_password': instance.enableForgotPassword,
     };

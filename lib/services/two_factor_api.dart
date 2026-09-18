@@ -155,6 +155,10 @@ class TwoFactorApi {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 30);
     try {
+      // Fail closed: credentials and 2FA codes must never leave over cleartext.
+      if (!_env.baseUrl.startsWith('https://')) {
+        throw StateError('Insecure API base URL: HTTPS is required.');
+      }
       final base =
           _env.baseUrl.endsWith('/') ? _env.baseUrl : '${_env.baseUrl}/';
       final req = await client.postUrl(Uri.parse('$base$path'));
@@ -181,6 +185,17 @@ class TwoFactorApi {
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// Request a password-reset email (`POST api/auth/lostPassword`).
+  /// Returns `true` when the request was accepted, including "User not found"
+  /// (so the screen never reveals whether an account exists), and `false` for
+  /// network/server failures.
+  Future<bool> lostPassword(String username) async {
+    final json = await _post(AppUrls.lostPassword, {'username': username});
+    if (json['success'] == true) return true;
+    final msg = (json['message'] ?? '').toString().toLowerCase();
+    return msg.contains('not found');
   }
 
   Future<AuthResult> authenticate({

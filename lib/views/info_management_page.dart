@@ -4,14 +4,16 @@ import 'package:sevenup_mobile/common/app_bottom_nav.dart';
 import 'package:sevenup_mobile/common/module_header.dart';
 import 'package:sevenup_mobile/common/nav_drawer.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
-import 'package:sevenup_mobile/models/info_comms.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:sevenup_mobile/state/notifications/notification_cubit.dart';
 import 'package:sevenup_mobile/views/announcements_page.dart';
+import 'package:sevenup_mobile/views/communications_page.dart';
 import 'package:sevenup_mobile/views/messages_page.dart';
 
 /// Information Management hub (Figma 20A) — the first screen after tapping the
 /// Information Management service. Surfaces the module's two features:
-/// Announcements and Messages. No endpoints yet; unread counts come from the
-/// sample data in [info_comms.dart].
+/// Announcements, Communications and Messages. Unread counts come from the live
+/// `notifications/counts` endpoint via [NotificationCubit].
 class InfoManagementPage extends StatelessWidget {
   static const routeName = '/information';
   const InfoManagementPage({super.key});
@@ -19,9 +21,13 @@ class InfoManagementPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scaffoldKey = GlobalKey<ScaffoldState>();
-    final unreadAnnouncements =
-        sampleAnnouncements().where((a) => !a.read).length;
-    final newMessages = sampleInbox().where((m) => m.unread).length;
+    // Throttled refresh (no-op if the counts were fetched recently).
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => context.read<NotificationCubit>().loadIfStale());
+    final counts = context.watch<NotificationCubit>().state;
+    final unreadAnnouncements = counts.announcements;
+    final unreadCommunications = counts.communications;
+    final newMessages = counts.messages;
 
     return Scaffold(
       key: scaffoldKey,
@@ -33,7 +39,7 @@ class InfoManagementPage extends StatelessWidget {
           children: [
             ModuleHeader(
               title: 'Information Management',
-              subtitle: 'Announcements and direct messages',
+              subtitle: 'Announcements, communications and messages',
               onBack: () => Navigator.of(context).maybePop(),
               onMenu: () => scaffoldKey.currentState?.openDrawer(),
             ),
@@ -58,8 +64,8 @@ class InfoManagementPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Read organizational announcements and access your direct '
-                    'messages.',
+                    'Read organizational announcements and communications, and '
+                    'access your direct messages.',
                     style: AppTokens.manrope(
                         size: 15,
                         weight: 400,
@@ -91,6 +97,29 @@ class InfoManagementPage extends StatelessWidget {
                           curve: Curves.easeOut),
                   const SizedBox(height: 18),
                   _FeatureCard(
+                    icon: Icons.forward_to_inbox_rounded,
+                    title: 'Communications',
+                    description:
+                        'Policies, circulars and learning notices shared with '
+                        'you.',
+                    badge: unreadCommunications > 0
+                        ? '$unreadCommunications unread'
+                        : 'All read',
+                    actionLabel: 'View',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const CommunicationsPage()),
+                    ),
+                  )
+                      .animate(delay: 90.ms)
+                      .fadeIn(duration: 360.ms)
+                      .slideY(
+                          begin: 0.10,
+                          end: 0,
+                          duration: 360.ms,
+                          curve: Curves.easeOut),
+                  const SizedBox(height: 18),
+                  _FeatureCard(
                     icon: Icons.forum_rounded,
                     title: 'Messages',
                     description:
@@ -101,7 +130,7 @@ class InfoManagementPage extends StatelessWidget {
                       MaterialPageRoute(builder: (_) => const MessagesPage()),
                     ),
                   )
-                      .animate(delay: 90.ms)
+                      .animate(delay: 180.ms)
                       .fadeIn(duration: 360.ms)
                       .slideY(
                           begin: 0.10,

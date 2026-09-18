@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:sevenup_mobile/common/app_bottom_nav.dart';
+import 'package:sevenup_mobile/common/course_state_card.dart';
 import 'package:sevenup_mobile/common/module_header.dart';
 import 'package:sevenup_mobile/common/nav_drawer.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
@@ -28,6 +29,12 @@ class _CourseDetailsState extends State<CourseDetails> {
   late RefreshController controller;
 
   refresh() {
+    // Pending admin approval: the user is not enrolled, so never load or
+    // expose the lessons (and therefore never the player).
+    if (widget.course.isAwaitingApproval) {
+      controller.refreshCompleted();
+      return;
+    }
     cubit
       ..load()
       ..loadPercentage();
@@ -175,7 +182,15 @@ class _CourseDetailsState extends State<CourseDetails> {
                               ),
                             ],
                           ),
-                          CourseItemList(course: course),
+                          if (course.isAwaitingApproval)
+                            const CourseStateCard(
+                              state: CourseCardState.empty,
+                              title: 'Awaiting approval',
+                              message:
+                                  'Your enrolment request is awaiting administrator approval. The lessons will unlock once it is approved.',
+                            )
+                          else
+                            CourseItemList(course: course),
                           const SizedBox(height: 20),
                         ],
                       ),

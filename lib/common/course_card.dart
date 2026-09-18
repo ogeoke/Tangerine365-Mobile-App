@@ -12,10 +12,21 @@ import 'package:sevenup_mobile/extensions/date.dart';
 import 'package:sevenup_mobile/gen/assets.gen.dart';
 import 'package:sevenup_mobile/main.dart';
 import 'package:sevenup_mobile/models/course.dart';
+import 'package:sevenup_mobile/views/course/cubit/category_cubit.dart';
 import 'package:sevenup_mobile/views/course/cubit/course_action_cubit.dart';
+import 'package:sevenup_mobile/views/course/cubit/course_cubit.dart';
 import 'package:sevenup_mobile/views/course_details.dart';
 
-enum CourseAction { enroll, enter, subscribe, adminOnly }
+enum CourseAction { enroll, enter, subscribe, adminOnly, waiting, noEditions }
+
+/// Shown when the user taps a course whose enrolment is still pending approval.
+void showAwaitingApprovalMessage(BuildContext context) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(const SnackBar(
+        content: Text(
+            'Your enrolment request is awaiting administrator approval.')));
+}
 
 extension Str on String {
   // capitalize first letter of a every word in a string
@@ -40,6 +51,11 @@ class CourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A course awaiting admin approval is never enterable, whatever action
+    // the caller passed in.
+    final action =
+        course.isAwaitingApproval ? CourseAction.waiting : this.action;
+
     actionHandler() {
       switch (action) {
         case CourseAction.enter:
@@ -65,6 +81,16 @@ class CourseCard extends StatelessWidget {
             ..showSnackBar(const SnackBar(
                 content: Text(
                     'This course can only be assigned by an administrator.')));
+          return;
+        case CourseAction.waiting:
+          showAwaitingApprovalMessage(context);
+          return;
+        case CourseAction.noEditions:
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(const SnackBar(
+                content:
+                    Text('No editions are available for this course yet.')));
           return;
       }
     }
@@ -121,20 +147,46 @@ class CourseCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    switch (action) {
-                      CourseAction.enter => 'Enter',
-                      CourseAction.subscribe => 'Subscribe',
-                      CourseAction.enroll => 'Request Approval',
-                      CourseAction.adminOnly => 'Admin Only',
-                    },
-                    style: AppTokens.manrope(
-                      size: 13,
-                      weight: 600,
-                      color: action == CourseAction.adminOnly
-                          ? AppTokens.textSecondary
-                          : AppTokens.primary,
-                    ),
+                  Row(
+                    children: [
+                      if (action == CourseAction.adminOnly ||
+                          action == CourseAction.waiting ||
+                          action == CourseAction.noEditions) ...[
+                        const Icon(Icons.lock_outline,
+                            size: 13, color: AppTokens.textSecondary),
+                        const SizedBox(width: 4),
+                      ],
+                      Flexible(
+                        child: Text(
+                          switch (action) {
+                            CourseAction.enter => 'Enter',
+                            CourseAction.subscribe => 'Subscribe',
+                            CourseAction.enroll => 'Request for access',
+                            CourseAction.adminOnly => 'Admin only',
+                            CourseAction.waiting => 'Waiting',
+                            CourseAction.noEditions => 'No editions',
+                          },
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTokens.manrope(
+                            size: 13,
+                            weight: 600,
+                            // Match the LMS: Enter = green, Subscribe / Request
+                            // for access = red, locked states = muted grey.
+                            color: switch (action) {
+                              CourseAction.enter => AppTokens.primary,
+                              CourseAction.subscribe ||
+                              CourseAction.enroll =>
+                                AppTokens.accent,
+                              CourseAction.adminOnly ||
+                              CourseAction.waiting ||
+                              CourseAction.noEditions =>
+                                AppTokens.textSecondary,
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -162,6 +214,12 @@ class RequestApprovalDialog extends StatelessWidget {
             listener: (context, state) {
               if (state is CourseActionSuccess) {
                 Navigator.of(context).pop();
+                // Reload so the card flips to "Waiting" (pending approval)
+                // instead of still offering "Request for access".
+                final root = App.navigatorKey.currentContext!;
+                root.read<CourseCubit>()
+                  ..loadCourses()
+                  ..loadCatalogue(root.read<CategoryCubit>().state.selected);
                 showDialog(
                   context: App.navigatorKey.currentContext!,
                   builder: (c) => const AppSuccessDialog(
@@ -221,6 +279,10 @@ class CourseCardAlt extends StatelessWidget {
       child: CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: () {
+          if (course.isAwaitingApproval) {
+            showAwaitingApprovalMessage(context);
+            return;
+          }
           Navigator.of(context).push(CupertinoPageRoute(
               builder: (c) => CourseDetails(course: course)));
         },
@@ -249,10 +311,10 @@ class CourseCardAlt extends StatelessWidget {
                         )),
                   ),
                 )),
-            const SizedBox(height: 9.0),
+            const SizedBox(width: 9.0),
             Expanded(
-                child: SizedBox(
-                    height: 120,
+                child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 120),
                     child: Padding(
                         padding: const EdgeInsets.only(right: 16.0),
                         child: Column(
@@ -261,7 +323,7 @@ class CourseCardAlt extends StatelessWidget {
                             children: [
                               Text(course.courseName ?? course.name ?? '',
                                   maxLines: 2,
-                                  // overflow: TextOverflow.ellipsis,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       fontSize: 14.0,
                                       fontWeight: FontWeight.w600,

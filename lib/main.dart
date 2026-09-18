@@ -42,6 +42,7 @@ class App extends StatelessWidget {
           theme: AppTheme.data,
           initialRoute: '/',
           navigatorKey: navigatorKey,
+          navigatorObservers: [routeObserver],
           builder: (c, w) =>
               context.watch<SettingsCubit>().state.data?.maintenanceMode ==
                       'true'

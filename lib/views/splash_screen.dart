@@ -8,7 +8,6 @@ import 'package:sevenup_mobile/state/auth/index.dart';
 import 'package:sevenup_mobile/state/settings/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'dashboard_page.dart';
@@ -34,9 +33,8 @@ class SplashAScreenState extends State<SplashScreen> {
 
   _gotToPage() async {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
-      await Future.delayed(
-        const Duration(milliseconds: 1000),
-      );
+      // Hold the approved splash briefly so it is actually seen.
+      await Future.delayed(const Duration(milliseconds: 2000));
       bool firstOpen =
           await SharedPreferenceManager().getBoolData(PrefKeys.firstOpen, true);
       if (GetIt.I<AuthBloc>().state is AuthenticationUninitialized) {
@@ -53,26 +51,20 @@ class SplashAScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Approved Tangerine splash: green topographic texture background with the
-    // white Tangerine365 logo centered. See design/figma_export 00P0.
+    // Approved Tangerine splash (design/figma_export 00P0): green topographic
+    // texture with the white Tangerine365 logo centred.
     return Material(
       color: AppTokens.primary,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/images/splash_texture.png',
-            fit: BoxFit.cover,
-          ),
+          Image.asset('assets/images/splash_texture.png', fit: BoxFit.cover),
           Center(
             child: Padding(
               padding: const EdgeInsets.all(40.0),
               child: SizedBox(
                 width: 240,
-                child: Image.asset('assets/images/tangerine_logo_white.png')
-                    .animate()
-                    .fadeIn(duration: 500.ms)
-                    .scaleXY(delay: 200.ms, begin: .92, end: 1),
+                child: Image.asset('assets/images/tangerine_logo_white.png'),
               ),
             ),
           ),

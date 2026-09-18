@@ -1,10 +1,15 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:sevenup_mobile/common/app_bottom_nav.dart';
 import 'package:sevenup_mobile/common/module_header.dart';
 import 'package:sevenup_mobile/common/nav_drawer.dart';
 import 'package:sevenup_mobile/constants/app_assets.dart';
+import 'package:sevenup_mobile/common/avatar_url.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
+import 'package:sevenup_mobile/data/api_repository.dart';
+import 'package:sevenup_mobile/models/leaderboard.dart';
+import 'package:sevenup_mobile/services/app_router.dart';
 import 'package:sevenup_mobile/state/auth/index.dart';
 
 // Rank medal + row tints (Figma 06).
@@ -24,9 +29,10 @@ class _Entry {
   final int level;
   final int badges;
   final bool isYou;
+  final String? avatarUrl;
   const _Entry(this.rank, this.name, this.subtitle, this.points, this.level,
       this.badges,
-      {this.isYou = false});
+      {this.isYou = false, this.avatarUrl});
 
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+'));
@@ -52,9 +58,68 @@ class LeaderboardPage extends StatefulWidget {
   State<LeaderboardPage> createState() => _LeaderboardPageState();
 }
 
-class _LeaderboardPageState extends State<LeaderboardPage> {
+class _LeaderboardPageState extends State<LeaderboardPage>
+    with WidgetsBindingObserver, RouteAware {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _repository = ApiRepository();
   _Tab _tab = _Tab.points;
+
+  Leaderboard? _data;
+  bool _loading = true;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() => _load(silent: true);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load(silent: true);
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = false;
+      });
+    }
+    final res = await _repository.getLeaderboard();
+    if (!mounted) return;
+    final raw = res.body;
+    if (raw != null && raw['leaderboard'] is List) {
+      setState(() {
+        _data = Leaderboard.fromData(raw);
+        _error = false;
+        _loading = false;
+      });
+    } else if (!silent) {
+      setState(() {
+        _error = true;
+        _loading = false;
+      });
+    }
+  }
 
   String get _fullName {
     final u = GetIt.I<AuthBloc>().state.user;
@@ -62,16 +127,23 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     return n.isEmpty ? 'You' : n;
   }
 
-  late final List<_Entry> _entries = [
-    _Entry(1, _fullName, 'You', 27100, 272, 4, isYou: true),
-    const _Entry(2, 'Sadiat Ogidan', 'Top performer', 1000, 268, 3),
-    const _Entry(3, 'Amina Yusuf', 'Top performer', 940, 265, 3),
-    const _Entry(4, 'Chinedu Okafor', 'Level 263', 875, 263, 2),
-    const _Entry(5, 'Adaobi Nwosu', 'Level 260', 820, 260, 2),
-    const _Entry(6, 'Tunde Bello', 'Level 257', 780, 257, 2),
-    const _Entry(7, 'Ngozi Eze', 'Level 254', 730, 254, 1),
-    const _Entry(8, 'Emeka Obi', 'Level 251', 690, 251, 1),
-  ];
+  /// Map the backend entries to view rows, flagging the signed-in learner.
+  List<_Entry> get _entries {
+    final me = GetIt.I<AuthBloc>().state.user?.id;
+    return (_data?.entries ?? const <LeaderEntry>[]).map((e) {
+      final you = me != null && me == e.userId.toString();
+      return _Entry(
+        e.rank,
+        you ? _fullName : e.name,
+        you ? 'You' : 'Level ${e.level}',
+        e.points,
+        e.level,
+        e.badges,
+        isYou: you,
+        avatarUrl: resolveAvatarUrl(e.avatar),
+      );
+    }).toList();
+  }
 
   /// The right-hand value shown per tab: points, level, or badge count.
   String _valueFor(_Entry e) {
@@ -88,7 +160,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
   String get _sectionTitle {
     switch (_tab) {
       case _Tab.points:
-        return 'Top 10 learners';
+        return 'Top learners';
       case _Tab.levels:
         return 'Level progression';
       case _Tab.badges:
@@ -101,12 +173,16 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _HowToCollectPointsSheet(),
+      builder: (_) => _HowToCollectPointsSheet(
+        rules: _data?.pointRules ?? const [],
+        levelRules: _data?.levelUpRules ?? const [],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final badges = _data?.badgeCount ?? 0;
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppTokens.screenBg,
@@ -122,36 +198,109 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
               onMenu: () => _scaffoldKey.currentState?.openDrawer(),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                    AppTokens.screenPadding, 16, AppTokens.screenPadding, 24),
-                children: [
-                  _ProfileCard(name: _fullName, rank: 1, badge: 'Learning Novice'),
-                  const SizedBox(height: 18),
-                  const _StatRow(points: '27,100', level: '272', badges: '4'),
-                  const SizedBox(height: 18),
-                  _TabSwitch(
-                      selected: _tab, onSelect: (t) => setState(() => _tab = t)),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(_sectionTitle,
-                            style: AppTokens.manrope(
-                                size: 20,
-                                weight: 700,
-                                color: AppTokens.textPrimary)),
+              child: _loading
+                  ? const Center(
+                      child:
+                          CircularProgressIndicator(color: AppTokens.primary))
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      color: AppTokens.primary,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(
+                            AppTokens.screenPadding, 16,
+                            AppTokens.screenPadding, 24),
+                        children: (_error && _data == null)
+                            ? [_ErrorBox(onRetry: _load)]
+                            : [
+                                _ProfileCard(
+                                    name: _fullName,
+                                    rank: _data?.rank ?? 0,
+                                    badge:
+                                        '$badges ${badges == 1 ? 'badge' : 'badges'}'),
+                                const SizedBox(height: 18),
+                                _StatRow(
+                                  points: _RankRow
+                                      .formatPoints(_data?.points ?? 0),
+                                  level: '${_data?.level ?? 0}',
+                                  badges: '$badges',
+                                ),
+                                const SizedBox(height: 18),
+                                _TabSwitch(
+                                    selected: _tab,
+                                    onSelect: (t) => setState(() => _tab = t)),
+                                const SizedBox(height: 18),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(_sectionTitle,
+                                          style: AppTokens.manrope(
+                                              size: 20,
+                                              weight: 700,
+                                              color: AppTokens.textPrimary)),
+                                    ),
+                                    _HowToPill(onTap: _showHowTo),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                if (_entries.isEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 40),
+                                    child: Center(
+                                      child: Text('No leaderboard data yet.',
+                                          style: AppTokens.manrope(
+                                              size: 14,
+                                              weight: 500,
+                                              color: AppTokens.textSecondary)),
+                                    ),
+                                  )
+                                else
+                                  for (final e in _entries) ...[
+                                    _RankRow(
+                                        entry: e, valueText: _valueFor(e)),
+                                    const SizedBox(height: 12),
+                                  ],
+                              ],
                       ),
-                      _HowToPill(onTap: _showHowTo),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  for (final e in _entries) ...[
-                    _RankRow(entry: e, valueText: _valueFor(e)),
-                    const SizedBox(height: 12),
-                  ],
-                ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBox extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _ErrorBox({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline,
+                size: 40, color: AppTokens.textSecondary),
+            const SizedBox(height: 12),
+            Text("Couldn't load the leaderboard.",
+                style: AppTokens.manrope(
+                    size: 14, weight: 500, color: AppTokens.textSecondary)),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppTokens.primary),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
+              onPressed: onRetry,
+              child: Text('Retry',
+                  style: AppTokens.manrope(
+                      size: 14, weight: 700, color: AppTokens.primary)),
             ),
           ],
         ),
@@ -209,7 +358,7 @@ class _ProfileCard extends StatelessWidget {
           const SizedBox(width: 12),
           Column(
             children: [
-              Text('Latest badge',
+              Text('Badges earned',
                   style: AppTokens.manrope(
                       size: 12,
                       weight: 400,
@@ -406,20 +555,7 @@ class _RankRow extends StatelessWidget {
                     color: topThree ? Colors.white : AppTokens.textSecondary)),
           ),
           const SizedBox(width: 12),
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: entry.isYou ? AppTokens.primary : AppTokens.lightGreen,
-            ),
-            child: Text(entry.initials,
-                style: AppTokens.manrope(
-                    size: 14,
-                    weight: 700,
-                    color: entry.isYou ? Colors.white : AppTokens.primary)),
-          ),
+          _Avatar(entry: entry),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -429,7 +565,7 @@ class _RankRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTokens.manrope(
-                        size: 16,
+                        size: 15,
                         weight: 700,
                         color: AppTokens.textPrimary)),
                 const SizedBox(height: 2),
@@ -442,11 +578,16 @@ class _RankRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Text(valueText,
-              style: AppTokens.manrope(
-                  size: 16,
-                  weight: 700,
-                  color: entry.isYou ? AppTokens.primary : AppTokens.textPrimary)),
+          Flexible(
+            child: Text(valueText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTokens.manrope(
+                    size: 16,
+                    weight: 700,
+                    color:
+                        entry.isYou ? AppTokens.primary : AppTokens.textPrimary)),
+          ),
         ],
       ),
     );
@@ -463,29 +604,59 @@ class _RankRow extends StatelessWidget {
   }
 }
 
-// -----------------------------------------------------------------------------
-// 06A • How to collect points (bottom sheet)
-// -----------------------------------------------------------------------------
-class _PointRule {
-  final String title;
-  final String desc;
-  final int points;
-  const _PointRule(this.title, this.desc, this.points);
-}
+/// Learner avatar: the network photo when available, initials otherwise.
+class _Avatar extends StatelessWidget {
+  final _Entry entry;
+  const _Avatar({required this.entry});
 
-class _HowToCollectPointsSheet extends StatelessWidget {
-  const _HowToCollectPointsSheet();
-
-  static const _rules = [
-    _PointRule('Daily login', 'Come back and keep your streak alive', 500),
-    _PointRule('Complete a course', 'Finish every lesson in a course', 600),
-    _PointRule('Earn a certificate', 'Collect proof of your achievement', 150),
-    _PointRule('Pass a test', 'Successfully complete an assessment', 250),
-    _PointRule('Join a discussion', 'Post a topic or helpful comment', 50),
-  ];
+  Widget _initials() => Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        color: entry.isYou ? AppTokens.primary : AppTokens.lightGreen,
+        child: Text(entry.initials,
+            style: AppTokens.manrope(
+                size: 14,
+                weight: 700,
+                color: entry.isYou ? Colors.white : AppTokens.primary)),
+      );
 
   @override
   Widget build(BuildContext context) {
+    final url = entry.avatarUrl;
+    return ClipOval(
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: url == null
+            ? _initials()
+            : CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => _initials(),
+                errorWidget: (_, __, ___) => _initials(),
+              ),
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 06A • How to collect points (bottom sheet)
+// -----------------------------------------------------------------------------
+class _HowToCollectPointsSheet extends StatelessWidget {
+  /// Admin-configured rules from the leaderboard endpoint (`pointRules`).
+  final List<PointRule> rules;
+
+  /// Admin-configured level-up rules from the same response (`levelUpRules`).
+  final List<LevelUpRule> levelRules;
+  const _HowToCollectPointsSheet(
+      {required this.rules, this.levelRules = const []});
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = rules.where((r) => r.enabled).toList();
+    final levels = levelRules.where((r) => r.enabled).toList();
     return Container(
       constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * 0.82),
@@ -541,13 +712,116 @@ class _HowToCollectPointsSheet extends StatelessWidget {
             ),
           ),
           Flexible(
-            child: ListView.separated(
+            child: ListView(
+              shrinkWrap: true,
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              itemCount: _rules.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, i) =>
-                  _RuleTile(index: i + 1, rule: _rules[i], green: i.isEven),
+              children: [
+                if (shown.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12, bottom: 6),
+                    child: Text('Point rules are unavailable right now.',
+                        style: AppTokens.manrope(
+                            size: 13,
+                            weight: 500,
+                            color: AppTokens.textSecondary)),
+                  )
+                else
+                  for (var i = 0; i < shown.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _RuleTile(
+                          index: i + 1, rule: shown[i], green: i.isEven),
+                    ),
+                if (levels.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text('How to level up',
+                      style: AppTokens.manrope(
+                          size: 20,
+                          weight: 700,
+                          color: AppTokens.textPrimary)),
+                  const SizedBox(height: 4),
+                  Text('Your level rises as you reach each milestone.',
+                      style: AppTokens.manrope(
+                          size: 13,
+                          weight: 400,
+                          color: AppTokens.textSecondary)),
+                  const SizedBox(height: 14),
+                  for (var i = 0; i < levels.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _LevelRuleTile(rule: levels[i], green: i.isEven),
+                    ),
+                ],
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A level-up rule: label, the admin's display text, and the threshold.
+class _LevelRuleTile extends StatelessWidget {
+  final LevelUpRule rule;
+  final bool green;
+  const _LevelRuleTile({required this.rule, required this.green});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = green ? AppTokens.primary : AppTokens.accent;
+    final bg = green
+        ? AppTokens.lightGreen.withOpacity(0.5)
+        : AppTokens.accent.withOpacity(0.07);
+    final icon = switch (rule.type) {
+      'completed_courses' => Icons.school_outlined,
+      'badges_received' => Icons.military_tech_outlined,
+      _ => Icons.trending_up,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
+            child: Icon(icon, size: 18, color: Colors.white),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(rule.label,
+                    style: AppTokens.manrope(
+                        size: 15,
+                        weight: 700,
+                        color: AppTokens.textPrimary)),
+                if (rule.displayText.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(rule.displayText,
+                      style: AppTokens.manrope(
+                          size: 12,
+                          weight: 400,
+                          color: AppTokens.textSecondary)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+                color: accent, borderRadius: BorderRadius.circular(20)),
+            child: Text('${rule.threshold}',
+                style: AppTokens.manrope(
+                    size: 14, weight: 700, color: Colors.white)),
           ),
         ],
       ),
@@ -557,7 +831,7 @@ class _HowToCollectPointsSheet extends StatelessWidget {
 
 class _RuleTile extends StatelessWidget {
   final int index;
-  final _PointRule rule;
+  final PointRule rule;
   final bool green;
   const _RuleTile(
       {required this.index, required this.rule, required this.green});
@@ -590,17 +864,11 @@ class _RuleTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(rule.title,
+                Text(rule.label,
                     style: AppTokens.manrope(
-                        size: 16,
+                        size: 15,
                         weight: 700,
                         color: AppTokens.textPrimary)),
-                const SizedBox(height: 2),
-                Text(rule.desc,
-                    style: AppTokens.manrope(
-                        size: 12,
-                        weight: 400,
-                        color: AppTokens.textSecondary)),
               ],
             ),
           ),

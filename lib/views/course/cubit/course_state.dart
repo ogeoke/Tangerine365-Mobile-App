@@ -20,6 +20,15 @@ class CourseState extends Equatable {
       this.recentlyViewed,
       this.myCourses});
 
+  /// My Courses as the learner should see them: only real enrolments. Courses
+  /// whose request is still awaiting admin approval are excluded until the
+  /// admin approves them. (The raw [myCourses] is still used by the catalogue
+  /// to show those courses as "Waiting".)
+  List<Course>? get enrolledCourses => myCourses
+      ?.map((e) => e.course)
+      .where((c) => !c.isAwaitingApproval)
+      .toList();
+
   @override
   List<Object?> get props => [
         isLoading,

@@ -1,5 +1,6 @@
 import 'package:data_repository/data_repository.dart';
 import 'package:get_it/get_it.dart';
+import 'package:sevenup_mobile/constants/app_urls.dart';
 import 'package:sevenup_mobile/data/api.dart';
 import 'package:sevenup_mobile/models/assigned_course.dart';
 import 'package:sevenup_mobile/models/banners.dart';
@@ -173,6 +174,137 @@ class ApiRepository extends DataRepository {
   Future<ApiResponse<Profile, Profile>> getProfile() async {
     return await handleRequest(_api.profile());
   }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getCertificates() async {
+    return await handleRequest(_api.certificates());
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getCertificateRender(String certificateId, String courseId) async {
+    return await handleRequest(
+        _api.certificateRender(certificateId, courseId));
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      generateCertificate(String certificateId, String courseId) async {
+    return await handleRequest(
+        _api.certificateGenerate(certificateId, courseId));
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getCompetencies() async {
+    return await handleRequest(_api.competencies());
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getLeaderboard() async {
+    return await handleRequest(_api.leaderboard());
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getNotificationCounts() async {
+    return await handleRequest(_api.notificationCounts());
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getAnnouncements({bool unreadOnly = false}) async {
+    return await handleRequest(_api.announcements(unreadOnly: unreadOnly));
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      markAnnouncementRead(String id) async {
+    return await handleRequest(_api.announcementRead(id));
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>> getMessages(
+      {required bool sent}) async {
+    return await handleRequest(_api.messages(sent: sent));
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getMessage(String id) async {
+    return await handleRequest(_api.messageDetail(id));
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      markMessageRead(String id) async {
+    return await handleRequest(_api.messageRead(id));
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>> replyToMessage(
+      String id, String content) async {
+    return await handleRequest(_api.messageReply(id, content));
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getCommunications({String status = 'all'}) async {
+    return await handleRequest(_api.communications(status: status));
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      markCommunicationRead(String id) async {
+    return await handleRequest(_api.communicationRead(id));
+  }
+
+  // ---- Knowledge Repository ------------------------------------------------
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>> _knowledge(
+          String path,
+          [Map<String, String> params = const {}]) async =>
+      await handleRequest(_api.knowledgeRequest(path, params));
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getKnowledgeItems({
+    String? search,
+    String? type,
+    int? categoryId,
+    int? tagId,
+    bool featured = false,
+    int limit = 50,
+  }) =>
+          _knowledge(AppUrls.knowledge, {
+            'limit': '$limit',
+            if (search != null && search.isNotEmpty) 'search': search,
+            if (type != null && type.isNotEmpty) 'type': type,
+            if (categoryId != null) 'category_id': '$categoryId',
+            if (tagId != null) 'tag_id': '$tagId',
+            if (featured) 'featured': '1',
+          });
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      searchKnowledge(String q, {String? type, int? categoryId, int? tagId}) {
+    final t = q.trim();
+    return _knowledge(AppUrls.knowledgeSearch, {
+      'q': t.length > 200 ? t.substring(0, 200) : t,
+      'limit': '50',
+      if (type != null && type.isNotEmpty) 'type': type,
+      if (categoryId != null) 'category_id': '$categoryId',
+      if (tagId != null) 'tag_id': '$tagId',
+    });
+  }
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getKnowledgeCategories() => _knowledge(AppUrls.knowledgeCategories);
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getKnowledgeTypes() => _knowledge(AppUrls.knowledgeTypes);
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getKnowledgeTags({int limit = 10}) =>
+          _knowledge(AppUrls.knowledgeTags, {'limit': '$limit'});
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getKnowledgeResource(String id) =>
+          _knowledge(AppUrls.knowledgeResource, {'knowledgeId': id});
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getKnowledgeRelated(String id) =>
+          _knowledge(AppUrls.knowledgeRelated, {'knowledgeId': id});
+
+  Future<ApiResponse<Map<String, dynamic>, Map<String, dynamic>>>
+      getKnowledgeAttachments(String id) =>
+          _knowledge(AppUrls.knowledgeAttachments, {'knowledgeId': id});
 
   Future<ApiResponse<List<Unit>, Unit>> getUnits(String lessonId) async {
     return await handleRequest(_api.units(lessonId));

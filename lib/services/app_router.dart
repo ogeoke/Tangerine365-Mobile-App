@@ -16,6 +16,11 @@ import 'package:sevenup_mobile/views/quick_tour_page.dart';
 import 'package:sevenup_mobile/views/splash_screen.dart';
 import 'package:flutter/material.dart';
 
+/// App-wide route observer so screens can refresh when they become visible
+/// again (e.g. after popping a pushed page). Registered in [MaterialApp].
+final RouteObserver<PageRoute<dynamic>> routeObserver =
+    RouteObserver<PageRoute<dynamic>>();
+
 class AppRouter {
   static Route onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
