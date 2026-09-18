@@ -7,6 +7,7 @@ import 'package:sevenup_mobile/services/app_router.dart';
 import 'package:sevenup_mobile/state/auth/index.dart';
 import 'package:sevenup_mobile/state/settings/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -34,7 +35,7 @@ class SplashAScreenState extends State<SplashScreen> {
   _gotToPage() async {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       // Hold the approved splash briefly so it is actually seen.
-      await Future.delayed(const Duration(milliseconds: 2000));
+      await Future.delayed(const Duration(milliseconds: 3200));
       bool firstOpen =
           await SharedPreferenceManager().getBoolData(PrefKeys.firstOpen, true);
       if (GetIt.I<AuthBloc>().state is AuthenticationUninitialized) {
@@ -64,7 +65,18 @@ class SplashAScreenState extends State<SplashScreen> {
               padding: const EdgeInsets.all(40.0),
               child: SizedBox(
                 width: 240,
-                child: Image.asset('assets/images/tangerine_logo_white.png'),
+                // Logo fades in and settles with a gentle scale-up.
+                // Slow, clearly visible entrance: the logo fades up over 1.6s
+                // while growing from 60% to full size, then settles.
+                child: Image.asset('assets/images/tangerine_logo_white.png')
+                    .animate()
+                    .fadeIn(duration: 1600.ms, curve: Curves.easeInOut)
+                    .scaleXY(
+                      begin: .60,
+                      end: 1,
+                      duration: 1900.ms,
+                      curve: Curves.easeOutBack,
+                    ),
               ),
             ),
           ),
