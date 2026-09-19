@@ -71,8 +71,22 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
   ) async {
     final username = await _vault.getString(PrefKeys.username);
     final password = await _vault.getString(PrefKeys.password);
+    // Nothing saved (first run on this install, or the keystore was cleared):
+    // sending blanks would surface the server's confusing "invalid login
+    // data" message, so explain what to do instead.
+    if (username == null ||
+        username.isEmpty ||
+        password == null ||
+        password.isEmpty) {
+      emit(state.copyWith(
+        isLoading: false,
+        errorMessage: 'Please sign in with your password once, then '
+            'biometric sign-in will work.',
+      ));
+      return;
+    }
     return _mapLoginPressedToState(
-      LoginPressedEvent(username ?? '', password ?? ''),
+      LoginPressedEvent(username, password),
       emit,
     );
   }

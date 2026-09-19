@@ -73,9 +73,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<SetBiometrics>((event, emit) async {
       bool val = (state.useBiometrics);
-      // print(val);
       emit(Default(state.token ?? '', state.user!, !val));
       await SharedPreferenceManager().setBoolData(PrefKeys.biometrics, !val);
+      // Turning biometrics OFF: the stored credentials exist only to replay
+      // the login for the fingerprint prompt, so don't keep them around.
+      if (val) {
+        _vault.deleteKey(PrefKeys.password);
+        _vault.deleteKey(PrefKeys.username);
+      }
     });
 
     on<LogOut>((event, emit) {
@@ -91,12 +96,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         ),
       );
       if (event.deleteSaved) {
-        // Explicit logout: wipe every stored credential/token from the
-        // encrypted keystore.
+        // Explicit logout: always drop the session token and cached profile.
         _vault.deleteKey(PrefKeys.token);
         _vault.deleteKey(PrefKeys.user);
-        _vault.deleteKey(PrefKeys.password);
-        _vault.deleteKey(PrefKeys.username);
+        // Credentials are what biometric sign-in replays, so only wipe them
+        // when biometrics is OFF. Otherwise logging out would permanently
+        // break the fingerprint login the user just enabled.
+        if (!state.useBiometrics) {
+          _vault.deleteKey(PrefKeys.password);
+          _vault.deleteKey(PrefKeys.username);
+        }
       }
       if (!alreadyShownPopup && event.message?.isNotEmpty == true) {
         alreadyShownPopup = true;
