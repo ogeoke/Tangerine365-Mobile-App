@@ -30,6 +30,14 @@ class AppAssets {
   static const modBanking = 'assets/images/mod_banking.png';
   static const modInformation = 'assets/images/mod_information.png';
 
+  // Bottom-nav + side-menu icons, exported from the Figma
+  // "T365/Bottom Navigation" component (white on transparent, tinted in code).
+  static const navHome = 'assets/svg/nav_home.svg';
+  static const navCourses = 'assets/images/nav_courses.png';
+  static const navRepository = 'assets/images/nav_repository.png';
+  static const navBanking = 'assets/images/nav_banking.png';
+  static const navInformation = 'assets/images/nav_information.png';
+
   // Colour-neutral carved-lattice texture laid over the active Home module
   // cards. The card colour comes from AppTokens, so a new client only changes
   // colours — never this image.

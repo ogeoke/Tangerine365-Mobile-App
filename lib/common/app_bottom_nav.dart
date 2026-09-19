@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:sevenup_mobile/constants/app_assets.dart';
 import 'package:sevenup_mobile/constants/app_tokens.dart';
 import 'package:sevenup_mobile/views/banking_tools_page.dart';
@@ -54,7 +55,7 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_NavItemData>[
       _NavItemData(
-        icon: Icons.home_rounded,
+        iconSvg: AppAssets.navHome,
         label: 'Home',
         onTap: () {
           if (currentIndex == 0) return;
@@ -62,7 +63,7 @@ class AppBottomNav extends StatelessWidget {
         },
       ),
       _NavItemData(
-        iconAsset: AppAssets.modCourses,
+        iconAsset: AppAssets.navCourses,
         label: 'Courses',
         onTap: () => _goToModule(
           context,
@@ -71,7 +72,7 @@ class AppBottomNav extends StatelessWidget {
         ),
       ),
       _NavItemData(
-        iconAsset: AppAssets.modRepository,
+        iconAsset: AppAssets.navRepository,
         label: 'Repository',
         onTap: () => _goToModule(
           context,
@@ -80,7 +81,7 @@ class AppBottomNav extends StatelessWidget {
         ),
       ),
       _NavItemData(
-        iconAsset: AppAssets.modBanking,
+        iconAsset: AppAssets.navBanking,
         // Short label so it doesn't truncate in the 5-tab bottom bar.
         label: 'Banking',
         onTap: () => _goToModule(
@@ -90,7 +91,7 @@ class AppBottomNav extends StatelessWidget {
         ),
       ),
       _NavItemData(
-        iconAsset: AppAssets.modInformation,
+        iconAsset: AppAssets.navInformation,
         label: 'Information',
         onTap: () => _goToModule(
           context,
@@ -122,13 +123,13 @@ class AppBottomNav extends StatelessWidget {
 }
 
 class _NavItemData {
-  final IconData? icon;
   final String? iconAsset;
+  final String? iconSvg;
   final String label;
   final VoidCallback onTap;
   const _NavItemData({
-    this.icon,
     this.iconAsset,
+    this.iconSvg,
     required this.label,
     required this.onTap,
   });
@@ -151,15 +152,23 @@ class _NavItem extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              data.iconAsset != null
-                  ? Image.asset(
-                      data.iconAsset!,
-                      width: 24,
-                      height: 24,
-                      color: color,
-                      colorBlendMode: BlendMode.srcIn,
-                    )
-                  : Icon(data.icon, color: color, size: 24),
+              if (data.iconSvg != null)
+                SvgPicture.asset(
+                  data.iconSvg!,
+                  width: 24,
+                  height: 24,
+                  colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                )
+              else if (data.iconAsset != null)
+                Image.asset(
+                  data.iconAsset!,
+                  width: 24,
+                  height: 24,
+                  color: color,
+                  colorBlendMode: BlendMode.srcIn,
+                )
+              else
+                const SizedBox(width: 24, height: 24),
               const SizedBox(height: 4),
               Text(
                 data.label,

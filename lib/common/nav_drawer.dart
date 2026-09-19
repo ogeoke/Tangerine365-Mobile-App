@@ -71,14 +71,14 @@ class _NavDrawerState extends State<NavDrawer> {
   }
 
   List<_Module> get _modules => [
-    _Module(AppAssets.modCourses, 'Courses', [
+    _Module(AppAssets.navCourses, 'Courses', [
       _Sub('My Learning', (c) => _open(c, const MyLearningPage())),
       _Sub('Leaderboard', (c) => _open(c, const LeaderboardPage())),
       _Sub('Subscription Code', (c) => _open(c, const ActivateKeyPage())),
       _Sub('Competencies', (c) => _open(c, const CompetenciesPage())),
       _Sub('Certificates', (c) => _open(c, const CertificatesPage())),
     ]),
-    _Module(AppAssets.modRepository, 'Knowledge Repository', [
+    _Module(AppAssets.navRepository, 'Knowledge Repository', [
       _Sub('Overview', (c) => _open(c, const KnowledgeRepositoryPage())),
       _Sub(
         'Products',
@@ -103,13 +103,13 @@ class _NavDrawerState extends State<NavDrawer> {
             _open(c, const KnowledgeResultsPage(types: ['faq'], title: 'FAQs')),
       ),
     ]),
-    _Module(AppAssets.modBanking, 'Banking Tools', [
+    _Module(AppAssets.navBanking, 'Banking Tools', [
       _Sub('Overview', (c) => _open(c, const BankingToolsPage())),
       _Sub('Forex & Rates', (c) => _open(c, const ForexRatesPage())),
       _Sub('Forms', (c) => _open(c, const BankFormsPage())),
       _Sub('Loan Calculator', (c) => _open(c, const LoanCalculatorPage())),
     ]),
-    _Module(AppAssets.modInformation, 'Information Management', [
+    _Module(AppAssets.navInformation, 'Information Management', [
       _Sub('Overview', (c) => _open(c, const InfoManagementPage())),
       _Sub('Announcements', (c) => _open(c, const AnnouncementsPage())),
       _Sub('Communications', (c) => _open(c, const CommunicationsPage())),
